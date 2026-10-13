@@ -7,6 +7,7 @@
   const D = window.CTV_DATA;
   const HOLLAND_SCORER = window.CTV_HOLLAND;
   const KEY = "ctv_state_v1";
+  const RECORDS_URL = String((window.CTV_CONFIG || {}).recordsUrl || "").replace(/\/+$/, "");
 
   /* ================= TRẠNG THÁI ================= */
   function blankState() {
@@ -24,6 +25,7 @@
       builder: { subjects: [], cd: [] },
       shortlist: [], final: { schoolId: "", comboKey: "", checks: {} },
       tracking: [],
+      record: { code: "", savedAt: "" },
       ui: { testTab: "holland", step4School: "" }
     };
   }
@@ -272,7 +274,7 @@
           </div>
           <div class="row">
             <button class="btn" type="button" data-go="1" ${S.role ? "" : "disabled"}>${hasData ? "Tiếp tục hồ sơ" : "Bắt đầu Bước 1"}</button>
-            <button class="btn ghost" type="button" data-action="open-profile-code">Nhập mã hồ sơ đã lưu</button>
+            <button class="btn ghost" type="button" data-action="open-profile-code">${RECORDS_URL ? "Mở hồ sơ bằng mã phiếu" : "Lưu / tải mã hồ sơ"}</button>
           </div>
           ${S.role ? "" : '<p class="small muted" style="margin-top:8px">Chọn vai trò để trợ lý tư vấn xưng hô cho phù hợp.</p>'}
         </div>
@@ -595,6 +597,7 @@
         <button type="button" class="btn ghost" data-action="copy-summary">Sao chép tóm tắt</button>
         <label class="row small" style="gap:6px"><input type="checkbox" data-action="check" data-k="talked" ${S.final.checks.talked ? "checked" : ""}> Đã trao đổi với giáo viên và cha mẹ</label>
       </div>
+      ${submitBox()}
       ${navRow(4, 6)}
     </section>`;
   }
@@ -634,6 +637,7 @@
       ${S.final.confirmed && fc ? `<div class="callout ok" style="margin-top:16px"><h4>Xác nhận phương án (H6)</h4><p>${esc(S.profile.nickname || "Học sinh")} chọn tổ hợp <b>${esc(comboLabel(fc.subjects))}</b>${fc.cd && fc.cd.length ? " với cụm chuyên đề " + esc(fc.cd.map(k => D.CHUYEN_DE[k]).join(", ")) : ""}. Hãy điền đúng phương án này vào phiếu đăng ký của trường.</p></div>
         <h3>Mã hồ sơ</h3><p class="small muted">Lưu lại để tiếp tục ở lần sau, hoặc gửi cho thầy cô.</p><div class="code-box">${esc(summaryText())}</div>
         <div class="row" style="margin-top:10px"><button type="button" class="btn ghost small" data-action="open-profile-code">Lưu / tải mã hồ sơ</button></div>` : ""}
+      ${updateBar()}
       ${navRow(5, 7)}
     </section>`;
   }
@@ -679,6 +683,7 @@
           ${S.tracking.map((e, i) => `<tr><td>${esc(e.period)}</td>${subs.map(s => `<td>${fmt(e.scores[s])}</td>`).join("")}<td>${e.overall ?? "–"}</td><td>${e.stress ?? "–"}</td><td><button type="button" class="btn ghost small" data-action="del-track" data-i="${i}">Xoá</button></td></tr>`).join("")}
         </tbody></table></div>
         <p class="small muted">Lịch kiểm tra lại gợi ý: cuối HK1 và cuối năm học.</p>` : ""}
+      ${updateBar()}
       ${navRow(6, null)}
     </section>`;
   }
@@ -748,6 +753,9 @@
       case "del-school": S.schools = S.schools.filter(s => s.id !== ds.id); if (S.ui.step4School === ds.id) S.ui.step4School = ""; save(); render(); break;
       case "del-track": S.tracking.splice(+ds.i, 1); save(); render(); break;
       case "open-profile-code": openProfileCode(); break;
+      case "record-consent": S.ui.recordConsent = b.checked; render(); break;
+      case "submit-record": submitRecord(true, b); break;
+      case "update-record": submitRecord(false, b); break;
     }
   });
   document.addEventListener("change", e => {
@@ -790,7 +798,11 @@
   const unb64 = s => decodeURIComponent(escape(atob(s)));
   function openProfileCode() {
     const code = b64(JSON.stringify(S));
-    dialog(`<h3>Mã hồ sơ</h3>
+    dialog(`${RECORDS_URL ? `<h3>Mở hồ sơ đã nộp</h3>
+      <p class="small">Nhập mã phiếu nhận được sau khi nộp ở Bước 5 để tiếp tục Bước 6–7. Dữ liệu đang có trên máy này sẽ được thay thế.</p>
+      <div class="row"><label class="sr-only" for="rc-code">Mã phiếu</label><input id="rc-code" type="text" autocomplete="off" spellcheck="false" placeholder="VD: 2026minhanh" style="max-width:220px">
+        <button type="button" class="btn" id="rc-load">Mở hồ sơ</button></div>
+      <p class="small" id="rc-err" style="color:var(--bad)"></p><hr class="rule">` : ""}<h3>Mã hồ sơ</h3>
       <p class="small">Mã hồ sơ chứa toàn bộ dữ liệu đã nhập trên trình duyệt này. Có thể sao chép hoặc tải tệp để tự lưu. Vì an toàn, bản thử nghiệm không hỗ trợ nhập/khôi phục mã từ nguồn ngoài.</p>
       <h4>Tóm tắt</h4><div class="code-box">${esc(summaryText())}</div>
       <h4 style="margin-top:12px">Mã đầy đủ</h4><textarea id="pcode" spellcheck="false">${esc(code)}</textarea>
@@ -805,6 +817,7 @@
       $("#pc-dl", root).onclick = () => { const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ho-so-tu-van-" + (S.profile.nickname || "hoc-sinh") + ".json"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
       $("#pc-reset", root).onclick = () => { if (window.confirm("Xoá toàn bộ dữ liệu đã nhập trên trình duyệt này?")) { S = blankState(); save(); closeDialog(); render({ top: true }); toast("Đã xoá dữ liệu"); } };
       $("#pc-close", root).onclick = closeDialog;
+      if (RECORDS_URL) $("#rc-load", root).onclick = () => loadRecord($("#rc-code", root).value, $("#rc-err", root), $("#rc-load", root));
     });
   }
   function openAddSchool() {
@@ -840,6 +853,94 @@
       "hoá": "hoa", "hóa": "hoa", "hoa": "hoa", "hoá học": "hoa", "hóa học": "hoa", "sinh": "sinh", "sinh học": "sinh", "cn": "cn", "công nghệ": "cn", "tin": "tin", "tin học": "tin",
       "nhạc": "an", "âm nhạc": "an", "mĩ thuật": "mt", "mỹ thuật": "mt", "mt": "mt", "văn": "van", "ngữ văn": "van", "toán": "toan", "sử": "su", "lịch sử": "su" };
     return (txt || "").split(/[,;–\-\/]+/).map(x => map[x.trim().toLowerCase()]).filter(k => k && (isCd ? D.CHUYEN_DE[k] : D.SUBJECTS[k]));
+  }
+
+  /* ================= KHO HỒ SƠ (máy chủ) ================= */
+  function submitBox() {
+    if (!RECORDS_URL) return `<div class="callout info no-print"><p class="small">Bản này chưa kết nối kho lưu hồ sơ. Hãy in hoặc tải mã hồ sơ để lưu.</p></div>`;
+    const ok = !!S.ui.recordConsent && !!S.profile.nickname.trim();
+    return `<div class="callout ${S.record.code ? "ok" : "info"} no-print" style="margin-top:16px">
+      <h4>Nộp hồ sơ cho nhà trường</h4>
+      ${S.record.code ? `<p class="small">Hồ sơ này đã có mã phiếu <b>${esc(S.record.code)}</b>. Nộp lại sẽ cập nhật đúng phiếu đó.</p>` : ""}
+      <p class="small">Sau khi nộp, phiếu được lưu để giáo viên tư vấn xem; dữ liệu trên máy này được xoá để bắt đầu lượt mới. ${T("Bạn", "Học sinh")} nhận một <b>mã phiếu</b> để mở lại hồ sơ ở Bước 6–7.</p>
+      <label class="row small" style="gap:6px"><input type="checkbox" data-action="record-consent" ${S.ui.recordConsent ? "checked" : ""}> ${T("Mình", "Học sinh và gia đình")} đồng ý gửi phiếu này cho nhà trường lưu trữ phục vụ tư vấn chọn môn.</label>
+      ${S.profile.nickname.trim() ? "" : `<p class="small" style="color:var(--bad)">Cần nhập tên gọi ở Bước 1 để thầy cô nhận ra phiếu. <button type="button" class="btn ghost small" data-go="1">Về Bước 1</button></p>`}
+      <div class="row" style="margin-top:8px"><button type="button" class="btn ok" data-action="submit-record" ${ok ? "" : "disabled"}>Nộp hồ sơ và bắt đầu lượt mới</button></div>
+    </div>`;
+  }
+  function updateBar() {
+    if (!RECORDS_URL || !S.record.code) return "";
+    return `<div class="row no-print small" style="margin-top:16px;gap:10px"><span>Mã phiếu: <b>${esc(S.record.code)}</b>${S.record.savedAt ? " · lưu lần cuối " + esc(new Date(S.record.savedAt).toLocaleString("vi-VN")) : ""}</span>
+      <button type="button" class="btn ghost small" data-action="update-record">Cập nhật hồ sơ lên kho</button></div>`;
+  }
+  function recordPayload() {
+    const p = S.profile, sch = findSchool(p.schoolId), hs = hollandStats(), fc = finalCombo();
+    const state = JSON.parse(JSON.stringify(S));
+    delete state.record; state.ui = {};
+    return {
+      code: S.record.code || undefined, consent: true, state,
+      summary: {
+        role: S.role || "", nickname: p.nickname.trim().slice(0, 300), school: (sch ? sch.name : p.schoolOther || "").slice(0, 300),
+        holland: hs.answered ? hollandLabel(hs).replace(/<[^>]*>/g, "").slice(0, 300) : "",
+        finalCombo: fc ? comboLabel(fc.subjects).slice(0, 300) : "",
+        shortlist: S.shortlist.map(k => comboLabel(k.split("|")[1].split("+"))).join("; ").slice(0, 300)
+      },
+      summaryText: summaryText().slice(0, 6000)
+    };
+  }
+  async function recordsFetch(path, body) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(RECORDS_URL + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal, credentials: "omit" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { const e = new Error(data.error || "HTTP " + r.status); e.status = r.status; throw e; }
+      return data;
+    } finally { clearTimeout(t); }
+  }
+  async function submitRecord(startNew, btn) {
+    if (btn) btn.disabled = true;
+    let data;
+    try { data = await recordsFetch("/api/records", recordPayload()); }
+    catch (e) {
+      if (btn) btn.disabled = false;
+      toast(e.status === 404 ? "Không tìm thấy mã phiếu trên máy chủ" : e.status === 429 ? "Gửi quá nhiều lần, hãy thử lại sau ít phút" : "Chưa lưu được – kiểm tra kết nối rồi thử lại");
+      return;
+    }
+    if (!startNew) { S.record = { code: data.code, savedAt: data.savedAt }; save(); render(); toast("Đã cập nhật hồ sơ " + data.code); return; }
+    // Đã lưu trên máy chủ: xoá dữ liệu máy này ngay, rồi mới hiện mã phiếu.
+    try { localStorage.removeItem(KEY); } catch (e) { /* bỏ qua */ }
+    const restart = () => { try { localStorage.removeItem(KEY); } catch (e) { /* bỏ qua */ } window.location.reload(); };
+    dialog(`<h3>Đã nộp hồ sơ</h3>
+      <p>Mã phiếu của ${esc(S.profile.nickname)}:</p>
+      <p style="font-size:1.8rem;font-weight:800;letter-spacing:.08em;margin:8px 0">${esc(data.code)}</p>
+      <p class="small">Hãy chụp ảnh hoặc ghi lại mã này. Dùng mã ở nút “Mở hồ sơ bằng mã phiếu” trên trang đầu để tiếp tục Bước 6–7. Dữ liệu trên máy này đã được xoá.</p>
+      <div class="row" style="margin-top:12px"><button type="button" class="btn ghost" id="rd-copy">Sao chép mã</button><span class="spacer"></span><button type="button" class="btn" id="rd-new">Bắt đầu lượt mới</button></div>`, root => {
+      $("#rd-copy", root).onclick = () => copyText(data.code);
+      $("#rd-new", root).onclick = restart;
+      $("#dialog").addEventListener("close", restart, { once: true });
+    });
+  }
+  function stripUnsafe(v) {
+    if (Array.isArray(v)) return v.map(stripUnsafe);
+    if (v && typeof v === "object") { const o = {}; Object.keys(v).forEach(k => { if (k !== "__proto__" && k !== "constructor" && k !== "prototype") o[k] = stripUnsafe(v[k]); }); return o; }
+    return v;
+  }
+  async function loadRecord(raw, errEl, btn) {
+    const code = String(raw || "").toLowerCase().replace(/[\s-]/g, "");
+    if (!/^\d{4}[a-z0-9]{1,40}$/.test(code)) { errEl.textContent = "Mã phiếu gồm năm và tên gọi viết liền không dấu, ví dụ 2026minhanh."; return; }
+    errEl.textContent = ""; btn.disabled = true;
+    try {
+      const data = await recordsFetch("/api/records/load", { code });
+      const st = stripUnsafe(data.state);
+      if (!st || st.v !== 1 || typeof st.profile !== "object") throw new Error("bad state");
+      S = merge(blankState(), st);
+      S.record = { code: data.code, savedAt: data.updatedAt || "" };
+      S.ui = blankState().ui;
+      S.step = 6; save(); closeDialog(); render({ top: true }); toast("Đã mở hồ sơ " + data.code);
+    } catch (e) {
+      btn.disabled = false;
+      errEl.textContent = e.status === 404 ? "Không tìm thấy mã phiếu này." : e.status === 429 ? "Thử quá nhiều lần, hãy chờ ít phút." : "Không mở được hồ sơ – kiểm tra kết nối rồi thử lại.";
+    }
   }
 
   /* ================= API cho chatbot ================= */
