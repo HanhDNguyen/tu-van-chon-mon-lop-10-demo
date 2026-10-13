@@ -87,7 +87,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .step-label small { display: block; font-weight: 400; color: var(--muted); font-size: .78rem; }
 .step-btn.done .step-num { background: var(--ink); color: #fff; }
 .step-btn.current { background: var(--sheet); border-color: var(--ink); box-shadow: 4px 4px 0 var(--gold); }
-.step-btn.human .step-num { border-style: dashed; }
 
 /* ---------- Sheet & blocks ---------- */
 .sheet { background: var(--sheet); border: 1.5px solid var(--line); border-radius: var(--r-l); padding: 28px; }
