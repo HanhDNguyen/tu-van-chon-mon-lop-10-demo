@@ -88,7 +88,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .step-btn.done .step-num { background: var(--ink); color: #fff; }
 .step-btn.current { background: var(--sheet); border-color: var(--ink); box-shadow: 4px 4px 0 var(--gold); }
 .step-btn.human .step-num { border-style: dashed; }
-.steps-help { margin: 18px 10px 0; font-family: var(--hand); color: var(--ink); font-size: 1.1rem; line-height: 1.3; }
 
 /* ---------- Sheet & blocks ---------- */
 .sheet { background: var(--sheet); border: 1.5px solid var(--line); border-radius: var(--r-l); padding: 28px; }
@@ -332,7 +331,7 @@ table.t th { color: var(--ink); font-size: .85rem; background: var(--ink-soft); 
   .steps li + li { margin-top: 0; }
   .step-btn { grid-template-columns: 30px auto; white-space: nowrap; padding: 6px 10px; }
   .step-num { width: 30px; height: 30px; font-size: .9rem; }
-  .step-label small, .steps-help { display: none; }
+  .step-label small { display: none; }
   .main { padding: 16px 16px 110px; }
   .hero { grid-template-columns: 1fr; }
   .grid-3 { grid-template-columns: 1fr; }

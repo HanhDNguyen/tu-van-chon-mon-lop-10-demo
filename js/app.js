@@ -247,7 +247,7 @@
   function renderSteps() {
     $("#steps").innerHTML = '<div class="steps-inner"><ol>' + STEPS.map(st => `<li><button type="button" class="step-btn ${stepDone(st.n) ? "done" : ""} ${S.step === st.n ? "current" : ""} ${st.human ? "human" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
       <span class="step-num">${st.n}</span><span class="step-label">${esc(st.t)}<small>${esc(st.s)}</small></span></button></li>`).join("") +
-      `</ol><p class="steps-help">Bước 5 là buổi gặp trực tiếp với thầy cô và cha mẹ – web chỉ chuẩn bị phiếu.</p></div>`;
+      `</ol></div>`;
     const pill = $("#rolePill");
     if (S.role) { pill.hidden = false; pill.textContent = ROLE_NAME[S.role]; } else pill.hidden = true;
   }
@@ -573,7 +573,7 @@
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like");
     const fc = finalCombo();
     return `<section class="sheet">
-      ${stepHead(5, "Tư vấn giáo viên – cha mẹ – học sinh", "Đây là buổi trao đổi trực tiếp. Web chuẩn bị phiếu tóm tắt và câu hỏi gợi ý để buổi gặp hiệu quả hơn.")}
+      ${stepHead(5, "Tư vấn giáo viên – cha mẹ – học sinh", "Bước 5 là buổi gặp trực tiếp với thầy cô và cha mẹ – web chỉ chuẩn bị phiếu tóm tắt và câu hỏi gợi ý.")}
       <div class="callout info no-print"><p>${{ hs: "Bạn chỉ chia sẻ phiếu này với thầy cô và cha mẹ khi bạn đồng ý.", ph: "Anh/chị hãy cùng con xem phiếu trước buổi gặp và để con nói lên mong muốn của mình.", gv: "Thầy/cô có thể dùng phiếu như dữ liệu đầu vào; các con số chỉ mang tính tham khảo." }[S.role || "hs"]}</p></div>
       <div class="summary-doc" id="printArea">
         <h3>PHIẾU TÓM TẮT TƯ VẤN CHỌN MÔN LỚP 10 (H5)</h3>
