@@ -861,6 +861,7 @@
     const ok = !!S.ui.recordConsent && !!S.profile.nickname.trim();
     return `<div class="callout ${S.record.code ? "ok" : "info"} no-print" style="margin-top:16px">
       <h4>Nộp hồ sơ cho nhà trường</h4>
+      ${DEMO ? `<p class="small muted">Chế độ demo: hồ sơ chỉ lưu trong trình duyệt này và xem được ở <a href="admin/" target="_blank" rel="noopener">trang quản trị demo</a>.</p>` : ""}
       ${S.record.code ? `<p class="small">Hồ sơ này đã có mã phiếu <b>${esc(S.record.code)}</b>. Nộp lại sẽ cập nhật đúng phiếu đó.</p>` : ""}
       <p class="small">Sau khi nộp, phiếu được lưu để giáo viên tư vấn xem; dữ liệu trên máy này được xoá để bắt đầu lượt mới. ${T("Bạn", "Học sinh")} nhận một <b>mã phiếu</b> để mở lại hồ sơ ở Bước 6–7.</p>
       <label class="row small" style="gap:6px"><input type="checkbox" data-action="record-consent" ${S.ui.recordConsent ? "checked" : ""}> ${T("Mình", "Học sinh và gia đình")} đồng ý gửi phiếu này cho nhà trường lưu trữ phục vụ tư vấn chọn môn.</label>
@@ -888,7 +889,41 @@
       summaryText: summaryText().slice(0, 6000)
     };
   }
+  /* ----- Chế độ demo: kho giả lập trong trình duyệt (recordsUrl = "demo") ----- */
+  const DEMO = RECORDS_URL === "demo";
+  const DEMO_KEY = "ctv_demo_records_v1";
+  function demoDb() { try { const d = JSON.parse(localStorage.getItem(DEMO_KEY) || "{}"); return d && typeof d === "object" ? d : {}; } catch (e) { return {}; } }
+  function demoSlug(name) {
+    const t = String(name || "").toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+    return t.slice(0, 20) || "hocsinh";
+  }
+  function demoCode(raw) { const c = String(raw || "").toLowerCase().replace(/[\s-]/g, ""); return /^\d{4}[a-z0-9]{1,40}$/.test(c) ? c : null; }
+  function demoError(status, msg) { const e = new Error(msg); e.status = status; return e; }
+  function demoFetch(path, body) {
+    return new Promise((resolve, reject) => {
+      const db = demoDb(), now = new Date().toISOString();
+      if (path === "/api/records/load") {
+        const code = demoCode(body && body.code), r = code && db[code];
+        return r ? resolve({ code, state: r.state, updatedAt: r.updated_at }) : reject(demoError(404, "Code not found"));
+      }
+      if (path !== "/api/records" || !body || body.consent !== true || !body.state || !body.summary || !body.summary.nickname) return reject(demoError(400, "Invalid"));
+      const f = { role: body.summary.role, nickname: body.summary.nickname, school: body.summary.school, holland: body.summary.holland,
+        final_combo: body.summary.finalCombo, shortlist: body.summary.shortlist, summary_text: body.summaryText, state: body.state };
+      let code = body.code ? demoCode(body.code) : null, created = false;
+      if (body.code) {
+        if (!code || !db[code]) return reject(demoError(404, "Code not found"));
+        db[code] = Object.assign(db[code], f, { updated_at: now, revision: db[code].revision + 1, consent_at: now });
+      } else {
+        const base = new Date().getFullYear() + demoSlug(f.nickname);
+        code = base; for (let n = 2; db[code]; n++) code = base + n;
+        db[code] = Object.assign({ code, created_at: now, updated_at: now, revision: 1, consent_at: now }, f); created = true;
+      }
+      try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) { return reject(demoError(500, "storage")); }
+      resolve({ code, created, savedAt: now });
+    });
+  }
   async function recordsFetch(path, body) {
+    if (DEMO) return demoFetch(path, body);
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
     try {
       const r = await fetch(RECORDS_URL + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal, credentials: "omit" });
@@ -949,5 +984,6 @@
     subjName, comboLabel, roleName: () => ROLE_NAME[S.role] || null
   };
 
+  if (DEMO) { const w = $("#adminLinkWrap"); if (w) w.hidden = false; }
   render();
 })();

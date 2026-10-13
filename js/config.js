@@ -4,6 +4,6 @@ window.CTV_CONFIG = {
   timeoutMs: 90000,
   telegramBot: "",
   telegramStart: "web",
-  /* Địa chỉ HTTPS của kho lưu hồ sơ trên Mac Mini. Để trống thì tắt chức năng nộp hồ sơ. */
-  recordsUrl: ""
+  /* Kho lưu hồ sơ: "demo" = giả lập trong trình duyệt (cho báo cáo); địa chỉ HTTPS = máy chủ thật trên Mac Mini; để trống = tắt chức năng nộp. */
+  recordsUrl: "demo"
 };
