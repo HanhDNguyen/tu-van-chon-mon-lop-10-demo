@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cổng thông tin tư vấn học sinh – Chọn môn lớp 10</title>
+  <meta name="description" content="Bản demo: hỗ trợ học sinh lớp 10 chọn 4 môn học lựa chọn theo quy trình 7 bước. © 2026 Dr. Duyen Nguyen.">
+  <meta name="author" content="Dr. Duyen Nguyen">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside style="background:#fff3cd;color:#513c00;padding:12px 18px;border-bottom:2px solid #d39e00;text-align:center" role="note">
+    <strong>BẢN THỬ NGHIỆM / EXPERIMENTAL</strong> — Gợi ý và trắc nghiệm chỉ để tham khảo, không thay thế tư vấn của giáo viên, chuyên gia tâm lý, cơ sở y tế hoặc quyết định của gia đình và nhà trường. Không nhập dữ liệu nhận dạng hay thông tin nhạy cảm.
+  </aside>
+  <a class="skip" href="#main">Bỏ qua, đến nội dung chính</a>
+
+  <header class="topbar">
+    <button class="brand" type="button" data-go="0" aria-label="Về trang đầu">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span class="on"></span><span></span><span class="on"></span><span></span><span class="on"></span>
+      </span>
+      <span class="brand-text">
+        <strong>Cổng thông tin tư vấn học sinh</strong>
+        <small>Tư vấn chọn môn học lựa chọn lớp 10</small>
+      </span>
+    </button>
+    <div class="topbar-right">
+      <span class="role-pill" id="rolePill" hidden></span>
+      <button class="btn ghost small" type="button" data-action="open-profile-code">Mã hồ sơ</button>
+      <span class="demo-tag" title="Bản demo – dữ liệu dùng tạm, sẽ chuẩn hóa sau">Bản demo</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="steps" id="steps" aria-label="Quy trình 7 bước"></nav>
+    <main id="main" class="main" tabindex="-1"></main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <strong>Cổng thông tin tư vấn học sinh</strong>
+        <span>Hỗ trợ học sinh lớp 10 chọn môn học lựa chọn theo quy trình 7 bước</span>
+      </div>
+      <div class="footer-copy">
+        <strong>© 2026 Dr. Duyen Nguyen</strong>
+        <span>Bảo lưu mọi quyền.</span>
+      </div>
+    </div>
+    <p class="footer-note">Bản demo minh họa chức năng. Kết quả trắc nghiệm và gợi ý chỉ mang tính tham khảo; quyết định cuối cùng thuộc về học sinh và gia đình, có sự tư vấn của giáo viên và xác nhận của nhà trường.</p>
+  </footer>
+
+  <!-- Chatbot -->
+  <button class="chat-fab" id="chatFab" type="button" aria-expanded="false" aria-controls="chatPanel">
+    <span class="chat-fab-dot" aria-hidden="true"></span> Hỏi trợ lý tư vấn
+  </button>
+  <section class="chat-panel" id="chatPanel" aria-label="Trợ lý tư vấn" hidden>
+    <header class="chat-head">
+      <div>
+        <strong>Trợ lý tư vấn</strong>
+        <small id="chatMode">Chế độ demo – trả lời theo bộ câu hỏi có sẵn</small>
+      </div>
+      <button class="icon-btn" type="button" data-action="close-chat" aria-label="Đóng trợ lý tư vấn">×</button>
+    </header>
+    <a class="chat-tg" id="chatTg" href="#" target="_blank" rel="noopener" hidden>Tiếp tục trò chuyện trên Telegram</a>
+    <div class="chat-log" id="chatLog" aria-live="polite"></div>
+    <div class="chat-chips" id="chatChips"></div>
+    <form class="chat-form" id="chatForm">
+      <label class="sr-only" for="chatInput">Nhập câu hỏi</label>
+      <input id="chatInput" type="text" autocomplete="off" placeholder="Nhập câu hỏi…">
+      <button class="btn" type="submit">Gửi</button>
+    </form>
+  </section>
+
+  <!-- Hộp thoại dùng chung -->
+  <dialog id="dialog" class="dialog">
+    <form method="dialog" class="dialog-inner" id="dialogInner"></form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/holland.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>
