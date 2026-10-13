@@ -126,7 +126,7 @@
     if (/toi la (giao vien|thay|co giao)|la giao vien/.test(t)) return setRole("gv");
 
     if (has(t, ["ban quyen", "ai lam", "ai phat trien", "so huu", "tac gia", "cua ai"]))
-      return "Cổng thông tin tư vấn học sinh thuộc bản quyền của Dr. Duyen Nguyen (© 2026). Bảo lưu mọi quyền.";
+      return "Cổng thông tin tư vấn học sinh thuộc bản quyền của Dr. Duyen Nguyen (© 2026). All rights reserved.";
 
     if (/^(xin chao|chao|hello|hi|alo)\b/.test(t)) return `Chào ${w.you}! ${w.You} muốn bắt đầu tư vấn đầy đủ, làm trắc nghiệm, hay hỏi nhanh về quy định chọn môn?`;
 

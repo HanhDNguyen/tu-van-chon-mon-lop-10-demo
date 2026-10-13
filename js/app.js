@@ -245,9 +245,9 @@
     return false;
   }
   function renderSteps() {
-    $("#steps").innerHTML = "<ol>" + STEPS.map(st => `<li><button type="button" class="step-btn ${stepDone(st.n) ? "done" : ""} ${S.step === st.n ? "current" : ""} ${st.human ? "human" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
+    $("#steps").innerHTML = '<div class="steps-inner"><ol>' + STEPS.map(st => `<li><button type="button" class="step-btn ${stepDone(st.n) ? "done" : ""} ${S.step === st.n ? "current" : ""} ${st.human ? "human" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
       <span class="step-num">${st.n}</span><span class="step-label">${esc(st.t)}<small>${esc(st.s)}</small></span></button></li>`).join("") +
-      `</ol><p class="steps-help">Bước 5 là buổi gặp trực tiếp với thầy cô và cha mẹ – web chỉ chuẩn bị phiếu.</p>`;
+      `</ol><p class="steps-help">Bước 5 là buổi gặp trực tiếp với thầy cô và cha mẹ – web chỉ chuẩn bị phiếu.</p></div>`;
     const pill = $("#rolePill");
     if (S.role) { pill.hidden = false; pill.textContent = ROLE_NAME[S.role]; } else pill.hidden = true;
   }

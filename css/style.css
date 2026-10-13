@@ -70,7 +70,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- Stepper (thời khoá biểu) ---------- */
 .steps { padding: 28px 0 28px 20px; }
-.steps ol { list-style: none; margin: 0; padding: 0; position: sticky; top: 84px; }
+.steps-inner { position: sticky; top: 84px; }
+.steps ol { list-style: none; margin: 0; padding: 0; }
 .steps li + li { margin-top: 4px; }
 .step-btn {
   width: 100%; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center;
@@ -326,7 +327,8 @@ table.t th { color: var(--ink); font-size: .85rem; background: var(--ink-soft); 
 @media (max-width: 960px) {
   .layout { grid-template-columns: 1fr; }
   .steps { padding: 12px 16px 0; overflow-x: auto; }
-  .steps ol { display: flex; gap: 6px; position: static; }
+  .steps-inner { position: static; }
+  .steps ol { display: flex; gap: 6px; }
   .steps li + li { margin-top: 0; }
   .step-btn { grid-template-columns: 30px auto; white-space: nowrap; padding: 6px 10px; }
   .step-num { width: 30px; height: 30px; font-size: .9rem; }
