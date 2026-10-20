@@ -5,7 +5,7 @@
 Bản **demo** để minh họa chức năng. Dữ liệu và bộ trắc nghiệm là bản dùng tạm, sẽ chuẩn hóa sau.
 
 ## Phiên bản
-Phiên bản hiện tại: **v2.0** (20/10/2026). Danh sách phiên bản và cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md` và trang Releases của repo.
+Phiên bản hiện tại: **v2.0** (20/10/2026). Mỗi phiên bản được giữ ở một nhánh `phien-ban/...` trên GitHub. Cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md`.
 
 Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh sách trường chỉ lưu trên máy đang dùng, trợ lý chạy chế độ demo. Khu vực giáo viên dùng chung, đăng nhập và lấy tổ hợp từ link web trường cần chạy qua máy chủ (`server/`).
 
