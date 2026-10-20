@@ -4,17 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cổng thông tin tư vấn học sinh – Chọn môn lớp 10</title>
-  <meta name="description" content="Bản demo: hỗ trợ học sinh lớp 10 chọn 4 môn học. © 2026 Dr. Duyen Nguyen.">
+  <meta name="description" content="Bản demo: hỗ trợ học sinh lớp 10 chọn 4 môn học lựa chọn theo quy trình 7 bước. © 2026 Dr. Duyen Nguyen.">
   <meta name="author" content="Dr. Duyen Nguyen">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Patrick+Hand&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=step5-solid">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <aside style="background:#fff3cd;color:#513c00;padding:12px 18px;border-bottom:2px solid #d39e00;text-align:center" role="note">
-    <strong>BẢN THỬ NGHIỆM</strong> — Gợi ý và trắc nghiệm chỉ để tham khảo, không thay thế tư vấn của giáo viên, chuyên gia tâm lý, cơ sở y tế hoặc quyết định của gia đình và nhà trường. Không nhập dữ liệu nhận dạng hay thông tin nhạy cảm.
-  </aside>
   <a class="skip" href="#main">Bỏ qua, đến nội dung chính</a>
 
   <header class="topbar">
@@ -29,7 +26,9 @@
     </button>
     <div class="topbar-right">
       <span class="role-pill" id="rolePill" hidden></span>
+      <button class="btn ghost small" type="button" data-action="save-profile">Lưu hồ sơ</button>
       <button class="btn ghost small" type="button" data-action="open-profile-code">Mã hồ sơ</button>
+      <button class="btn ghost small" type="button" id="teacherBtn" data-go="8">Giáo viên</button>
       <span class="demo-tag" title="Bản demo – dữ liệu dùng tạm, sẽ chuẩn hóa sau">Bản demo</span>
     </div>
   </header>
@@ -43,14 +42,13 @@
     <div class="footer-inner">
       <div class="footer-brand">
         <strong>Cổng thông tin tư vấn học sinh</strong>
-        <span>Hỗ trợ học sinh lớp 10 chọn môn học</span>
+        <span>Hỗ trợ học sinh lớp 10 chọn môn học lựa chọn theo quy trình 7 bước</span>
       </div>
       <div class="footer-copy">
         <strong>© 2026 Dr. Duyen Nguyen</strong>
-        <span>All rights reserved.</span>
+        <span>Bảo lưu mọi quyền.</span>
       </div>
     </div>
-    <p class="footer-note" id="adminLinkWrap" hidden><a href="admin/">Trang quản trị (demo)</a> · tài khoản demo: admin / admin</p>
     <p class="footer-note">Bản demo minh họa chức năng. Kết quả trắc nghiệm và gợi ý chỉ mang tính tham khảo; quyết định cuối cùng thuộc về học sinh và gia đình, có sự tư vấn của giáo viên và xác nhận của nhà trường.</p>
   </footer>
 
@@ -83,10 +81,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=records-3"></script>
-  <script src="js/data.js?v=records-3"></script>
-  <script src="js/holland.js?v=records-3"></script>
-  <script src="js/app.js?v=records-3"></script>
-  <script src="js/chat.js?v=records-3"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/chat.js"></script>
 </body>
 </html>

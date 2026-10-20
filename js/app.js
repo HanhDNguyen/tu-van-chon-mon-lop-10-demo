@@ -1,41 +1,31 @@
 /* =========================================================
    Cổng thông tin tư vấn học sinh – ỨNG DỤNG DEMO (7 bước)
-   © 2026 Dr. Duyen Nguyen. All rights reserved.
+   © 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
    ========================================================= */
 (function () {
   "use strict";
   const D = window.CTV_DATA;
-  const HOLLAND_SCORER = window.CTV_HOLLAND;
-  const KEY = "ctv_state_v1";
-  const RECORDS_URL = String((window.CTV_CONFIG || {}).recordsUrl || "").replace(/\/+$/, "");
+  const KEY = "ctv_state_v1", KEY_SCHOOLS = "ctv_schools_v1", KEY_ARCHIVE = "ctv_archive_v1", KEY_TOKEN = "ctv_teacher_token";
 
   /* ================= TRẠNG THÁI ================= */
   function blankState() {
     const hol = {}; D.HOLLAND.forEach(g => hol[g.key] = Array(9).fill(null));
     const pers = {}; D.PERSONALITY.forEach(p => pers[p.dim] = Array(4).fill(null));
     const gar = {}; D.GARDNER.forEach(g => gar[g.key] = Array(3).fill(null));
-    const tpb = {}; D.TPB.forEach(t => tpb[t.key] = Array(t.items.length).fill(null));
     return {
-      v: 1, role: null, step: 0,
-      profile: { nickname: "", schoolId: "", schoolOther: "", province: "", grades: {}, exam10: "", talents: "",
+      v: 2, role: null, step: 0,
+      profile: { code: "", nickname: "", className: "", schoolId: "", schoolOther: "", province: "", grades: {}, exam10: "", talents: "",
         liked: [], disliked: [], cond: { extra: "", time: "", device: "", econ: "" }, health: "", wish: "", familyWish: "" },
-      tests: { holland: hol, pers: pers, gardner: gar, tpb: { combo: null, ans: tpb } },
+      tests: { holland: hol, pers: pers, gardner: gar },
       careerFb: {}, careerGroup: "",
-      schools: [], constraints: { must: [], exclude: [] },
-      builder: { subjects: [], cd: [] },
-      shortlist: [], final: { schoolId: "", comboKey: "", checks: {} },
+      constraints: { must: [] },
+      shortlist: [], final: { schoolId: "", comboKey: "", cd: [], checks: {}, confirmed: false },
       tracking: [],
-      record: { code: "", savedAt: "" },
-      ui: { testTab: "holland", step4School: "" }
+      ui: { testTab: "holland", step4School: "", openWhy: [], showDiagram: false }
     };
   }
-  function load() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) { const s = JSON.parse(raw); if (s && s.v === 1) return merge(blankState(), s); }
-    } catch (e) { /* bỏ qua */ }
-    return blankState();
-  }
+  const safeGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const safeSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } };
   function merge(base, src) {
     for (const k in src) {
       if (src[k] && typeof src[k] === "object" && !Array.isArray(src[k]) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) merge(base[k], src[k]);
@@ -43,8 +33,42 @@
     }
     return base;
   }
+  function localSchools() { try { return JSON.parse(safeGet(KEY_SCHOOLS) || "[]"); } catch (e) { return []; } }
+  function saveLocalSchools(a) { safeSet(KEY_SCHOOLS, JSON.stringify(a)); }
+  function upgrade(s) {
+    // từ phiên bản 1: chuyển trường tự nhập sang kho trường, bỏ TPB, gộp “môn không học”
+    if (!s) return s;
+    if (Array.isArray(s.schools) && s.schools.length) { const loc = localSchools(); s.schools.forEach(x => { if (!loc.find(y => y.id === x.id)) loc.push(x); }); saveLocalSchools(loc); }
+    delete s.schools; delete s.builder;
+    if (s.tests) delete s.tests.tpb;
+    if (s.constraints && s.constraints.exclude) { s.profile = s.profile || {}; s.profile.disliked = [...new Set([...(s.profile.disliked || []), ...s.constraints.exclude])]; delete s.constraints.exclude; }
+    if (s.ui && s.ui.testTab === "tpb") s.ui.testTab = "holland";
+    s.v = 2;
+    return s;
+  }
+  function load() {
+    try { const raw = safeGet(KEY); if (raw) { const s = upgrade(JSON.parse(raw)); if (s && s.v === 2) return merge(blankState(), s); } } catch (e) { /* bỏ qua */ }
+    return blankState();
+  }
   let S = load();
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* bỏ qua */ } }
+  function save() { safeSet(KEY, JSON.stringify(S)); }
+
+  /* ================= MÁY CHỦ (khi web được mở qua trạm trung gian) ================= */
+  const SRV = { on: false, info: null, schools: [], token: (() => { try { return sessionStorage.getItem(KEY_TOKEN) || ""; } catch (e) { return ""; } })() };
+  async function api(path, opts = {}) {
+    const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    if (SRV.token) headers.Authorization = "Bearer " + SRV.token;
+    const res = await fetch(path, Object.assign({}, opts, { headers }));
+    let data = null; try { data = await res.json(); } catch (e) { /* bỏ qua */ }
+    if (res.status === 401) { SRV.token = ""; try { sessionStorage.removeItem(KEY_TOKEN); } catch (e) { /* bỏ qua */ } }
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    return data;
+  }
+  async function detectServer() {
+    if (!/^https?:/.test(location.protocol)) return;
+    try { SRV.info = await api("/api/info"); SRV.on = true; await refreshServerSchools(); } catch (e) { SRV.on = false; }
+  }
+  async function refreshServerSchools() { if (!SRV.on) return; try { const r = await api("/api/schools"); SRV.schools = (r.schools || []).map(s => Object.assign(s, { shared: true })); } catch (e) { /* bỏ qua */ } }
 
   /* ================= TIỆN ÍCH ================= */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -52,7 +76,8 @@
   const fmt = (n, d = 1) => (n == null || isNaN(n)) ? "–" : Number(n).toFixed(d).replace(".", ",");
   const avg = a => { const v = a.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((p, c) => p + c, 0) / v.length : null; };
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200); }
+  const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").trim();
+  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2600); }
   const isHS = () => S.role === "hs" || !S.role;
   const T = (hs, other) => isHS() ? hs : other;
   const ROLE_NAME = { hs: "Học sinh", ph: "Cha mẹ / người giám hộ", gv: "Giáo viên / CBQL" };
@@ -67,161 +92,197 @@
     if (cd && cd.length) h += cd.map(k => `<span class="mini-cd" title="Cụm chuyên đề">CĐ ${esc(D.CHUYEN_DE[k] || k)}</span>`).join("");
     return h + "</span>";
   }
-  function allSchools() { return D.SAMPLE_SCHOOLS.concat(S.schools); }
+  function allSchools() {
+    const seen = new Set(), out = [];
+    D.SAMPLE_SCHOOLS.concat(SRV.schools, localSchools()).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); out.push(s); } });
+    return out;
+  }
   function findSchool(id) { return allSchools().find(s => s.id === id) || null; }
-  function grade(key) { const v = parseFloat(String(S.profile.grades[key] ?? "").replace(",", ".")); return isNaN(v) ? null : clamp(v, 0, 10); }
+  const THCS_PF = Object.fromEntries(D.THCS.filter(s => s.passFail).map(s => [s.key, true]));
+  function grade(key) {
+    const raw = S.profile.grades[key];
+    if (THCS_PF[key]) return raw === "Đạt" ? 7.5 : raw === "Chưa đạt" ? 4.5 : null;
+    const v = parseFloat(String(raw ?? "").replace(",", ".")); return isNaN(v) ? null : clamp(v, 0, 10);
+  }
+  const gradeText = key => THCS_PF[key] ? (S.profile.grades[key] || "–") : fmt(grade(key));
+  const thcsName = k => (D.THCS.find(t => t.key === k) || {}).name || k;
+  function wordsMatch(text, name) {
+    const t = norm(text); if (!t) return false;
+    const words = norm(name).split(/[\s–\-&,()]+/).filter(w => w.length > 2 && !["nganh", "hoc", "khoa", "cong", "nghe", "ky", "thuat"].includes(w));
+    return words.some(w => t.includes(w)) || (name === "Y đa khoa" && /\b(y|bac si)\b/.test(t)) || (name === "Công nghệ thông tin" && /cntt|lap trinh/.test(t));
+  }
 
-  /* ================= TÍNH TOÁN – BƯỚC 1 ================= */
+  /* ================= BƯỚC 1 ================= */
   function strengthLists() {
     const strong = [], mid = [], weak = [];
-    D.THCS.forEach(s => { const g = grade(s.key); if (g == null) return; (g >= 8 ? strong : g >= 6.5 ? mid : weak).push(s.name + " (" + fmt(g) + ")"); });
+    D.THCS.forEach(s => {
+      const g = grade(s.key); if (g == null) return;
+      const label = s.name + " (" + gradeText(s.key) + ")";
+      if (THCS_PF[s.key]) { (g >= 7 ? mid : weak).push(label); return; }
+      (g >= 8 ? strong : g >= 6.5 ? mid : weak).push(label);
+    });
     return { strong, mid, weak };
   }
 
-  /* ================= TÍNH TOÁN – BƯỚC 2 ================= */
+  /* ================= BƯỚC 2 ================= */
   function hollandStats() {
-    return HOLLAND_SCORER.score(S.tests.holland);
-  }
-  function hollandLabel(hs) {
-    return !hs.done ? "Chưa đủ dữ liệu" : hs.code || "Các nhóm đồng điểm";
+    const sc = {}; let answered = 0;
+    D.HOLLAND.forEach(g => { const a = S.tests.holland[g.key]; answered += a.filter(x => x != null).length; sc[g.key] = a.reduce((p, c) => p + (c || 0), 0); });
+    const done = answered === 54;
+    const order = Object.keys(sc).sort((a, b) => sc[b] - sc[a]);
+    return { sc, answered, done, order, code: order.slice(0, 3).join(""), flat: done && (sc[order[0]] - sc[order[2]] < 4 || sc[order[0]] < 14) };
   }
   function persStats() {
     let answered = 0; const res = {};
     D.PERSONALITY.forEach(p => { const a = S.tests.pers[p.dim]; answered += a.filter(Boolean).length; const ca = a.filter(x => x === "a").length, cb = a.filter(x => x === "b").length; res[p.dim] = { a: ca, b: cb, letter: ca > cb ? p.a : cb > ca ? p.b : p.a + "/" + p.b }; });
-    const done = answered === 16;
-    return { res, answered, done, type: D.PERSONALITY.map(p => res[p.dim].letter).join(" – ") };
+    return { res, answered, done: answered === 16, type: D.PERSONALITY.map(p => res[p.dim].letter).join(" – ") };
   }
   function gardnerStats() {
     let answered = 0; const sc = {};
     D.GARDNER.forEach(g => { const a = S.tests.gardner[g.key]; answered += a.filter(x => x != null).length; sc[g.key] = a.reduce((p, c) => p + (c || 0), 0); });
-    const done = answered === 24;
-    const top = Object.keys(sc).sort((a, b) => sc[b] - sc[a]).slice(0, 3);
-    return { sc, answered, done, top };
+    return { sc, answered, done: answered === 24, top: Object.keys(sc).sort((a, b) => sc[b] - sc[a]).slice(0, 3) };
   }
-  function tpbStats() {
-    const t = S.tests.tpb; let answered = 0, total = 0; const m = {};
-    D.TPB.forEach(g => { const a = t.ans[g.key]; total += a.length; answered += a.filter(x => x != null).length; m[g.key] = avg(a); });
-    return { m, answered, total, done: answered === total && !!t.combo, combo: t.combo };
-  }
-  const level = v => v == null ? "–" : v >= 4 ? "cao" : v >= 3 ? "trung bình" : "thấp";
-  function tpbPatterns(m) {
-    const out = []; if (!m || m.ATT == null) return out;
-    if (m.ATT >= 4 && m.SN < 3) out.push({ k: "warn", t: "Bạn thích phương án này nhưng gia đình/thầy cô chưa ủng hộ → nên chuẩn bị trao đổi ở Bước 5." });
-    if (m.ATT < 3 && m.SN >= 4) out.push({ k: "warn", t: "Có vẻ đang chọn vì người khác mong muốn → nên khám phá lại sở thích thật của bản thân." });
-    if (m.PBC < 3) out.push({ k: "warn", t: "Mức tự tin/điều kiện còn thấp → xem lại năng lực thực tế, kế hoạch hỗ trợ hoặc phương án thay thế." });
-    if (m.INT < 3 && m.ATT >= 3.5 && m.SN >= 3.5 && m.PBC >= 3.5) out.push({ k: "info", t: "Mọi điều kiện khá thuận lợi nhưng ý định còn thấp → cần làm rõ điều gì khiến bạn còn phân vân." });
-    if (m.ATT >= 4 && m.SN >= 4 && m.PBC >= 4 && m.INT >= 4) out.push({ k: "ok", t: "Thái độ, sự ủng hộ, sự tự tin và ý định đều cao → sẵn sàng chốt ở Bước 6." });
-    return out;
-  }
+  const gName = k => (D.GARDNER.find(g => g.key === k) || {}).name || k;
 
-  /* ================= TÍNH TOÁN – BƯỚC 3 ================= */
-  function careerScore(c) {
-    const hs = hollandStats(), gs = gardnerStats();
-    let H = 0.5;
-    if (hs.done) { const w = [0.5, 0.3, 0.2]; H = c.h.split("").reduce((p, L, i) => p + w[i] * (hs.sc[L] / 36), 0); }
-    let G = 0.5;
-    if (gs.answered > 0) G = avg(c.g.map(k => (gs.sc[k] - 3) / 12)) ?? 0.5; G = clamp(G, 0, 1);
-    const Sg = avg(c.thcs.map(k => grade(k))); const SS = Sg == null ? 0.65 : Sg / 10;
-    const wish = (S.profile.wish || "").toLowerCase();
-    const words = c.name.toLowerCase().split(/[\s–\-&,()]+/).filter(w => w.length > 2);
-    const W = wish && words.some(w => wish.includes(w)) ? 0.15 : 0;
-    return Math.round(clamp(0.45 * H + 0.25 * G + 0.30 * SS + W, 0, 1) * 100);
+  /* ================= BƯỚC 3 – chấm ngành có truy vết ================= */
+  const LONG_PROGRAMS = ["Y đa khoa", "Răng – Hàm – Mặt", "Dược học", "Kiến trúc"];
+  function careerNeeds(c) {
+    const sets = c.th.map(k => D.TO_HOP[k].sel).filter(s => s.length);
+    const count = {}; sets.forEach(s => s.forEach(x => count[x] = (count[x] || 0) + 1));
+    return { sets, subjects: Object.keys(count).sort((a, b) => count[b] - count[a]) };
   }
-  function rankedCareers() { return D.CAREERS.map(c => ({ c, s: careerScore(c) })).sort((a, b) => b.s - a.s); }
+  function careerAnalysis(c) {
+    const hs = hollandStats(), gs = gardnerStats(), p = S.profile;
+    const rows = [], notes = [];
+    if (hs.answered) { const w = [0.5, 0.3, 0.2]; const H = c.h.split("").reduce((s, L, i) => s + w[i] * (hs.sc[L] / 36), 0) * 35;
+      rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: `Ngành hợp nhóm ${c.h}; điểm: ${c.h.split("").map(L => L + " " + hs.sc[L] + "/36").join(", ")}`, v: H, max: 35 }); }
+    else rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: "Chưa làm trắc nghiệm – tạm tính mức trung bình", v: 17.5, max: 35 });
+    if (gs.answered) { const G = clamp(avg(c.g.map(k => (gs.sc[k] - 3) / 12)) ?? 0.5, 0, 1) * 15;
+      rows.push({ f: "Trí tuệ nổi trội (Gardner)", d: `Ngành cần: ${c.g.map(k => gName(k) + " " + gs.sc[k] + "/15").join(", ")}`, v: G, max: 15 }); }
+    else rows.push({ f: "Trí tuệ nổi trội (Gardner)", d: "Chưa làm trắc nghiệm – tạm tính mức trung bình", v: 7.5, max: 15 });
+    const ag = avg(c.thcs.map(k => grade(k)));
+    rows.push({ f: "Kết quả học tập lớp 9", d: c.thcs.map(k => thcsName(k) + " " + gradeText(k)).join(", ") + (ag == null ? " – chưa có điểm, tạm tính" : ""), v: (ag == null ? 0.65 : ag / 10) * 25, max: 25 });
+    const need = careerNeeds(c);
+    const likedHit = need.subjects.filter(s => p.liked.includes(s));
+    if (likedHit.length) rows.push({ f: "Môn yêu thích", d: "Ngành dùng môn " + T("bạn", "học sinh") + " thích: " + likedHit.map(subjName).join(", "), v: Math.min(10, likedHit.length * 5), max: 10 });
+    if (need.sets.length && p.disliked.length) {
+      const blocked = need.sets.filter(s => s.some(x => p.disliked.includes(x))).length;
+      const X = blocked === need.sets.length ? -15 : blocked ? -5 : 0;
+      if (X) rows.push({ f: "Môn không muốn học", d: (X === -15 ? "Mọi tổ hợp xét tuyển chính đều cần môn không muốn học: " : "Một số tổ hợp xét tuyển cần môn không muốn học: ") + need.subjects.filter(s => p.disliked.includes(s)).map(subjName).join(", "), v: X, max: 0 });
+    }
+    if (p.wish) { const W = wordsMatch(p.wish, c.name) ? 10 : 0; rows.push({ f: "Nguyện vọng của học sinh", d: W ? `“${p.wish}” trùng với ngành này` : `“${p.wish}” – không trùng`, v: W, max: 10 }); }
+    if (p.familyWish) { const F = wordsMatch(p.familyWish, c.name) ? 5 : 0; rows.push({ f: "Mong muốn của gia đình", d: F ? `“${p.familyWish}” trùng với ngành này` : `“${p.familyWish}” – không trùng`, v: F, max: 5 }); }
+    if (p.talents) {
+      const tal = norm(p.talents);
+      const hit = D.TALENT_KEYS.some(t => t.k.some(k => tal.includes(norm(k))) && t.groups.includes(c.group));
+      rows.push({ f: "Năng khiếu, giải thưởng, CLB", d: hit ? `“${p.talents}” liên quan nhóm ${c.group}` : `“${p.talents}” – chưa thấy liên quan`, v: hit ? 5 : 0, max: 5 });
+    }
+    if (p.cond.econ === "Khó khăn" && LONG_PROGRAMS.includes(c.name)) notes.push("Thời gian đào tạo dài, chi phí cao – nên tìm hiểu học bổng, chính sách hỗ trợ.");
+    if (p.cond.time === "Dưới 1 giờ" && ["Y đa khoa", "Răng – Hàm – Mặt", "Dược học"].includes(c.name)) notes.push("Ngành đòi hỏi khối lượng học lớn; thời gian tự học hiện còn ít.");
+    if (p.health) notes.push(`Đã khai lưu ý sức khoẻ (“${p.health}”) – kiểm tra yêu cầu sức khoẻ của ngành.`);
+    return { c, rows, notes, total: Math.round(clamp(rows.reduce((s, r) => s + r.v, 0), 0, 100)) };
+  }
+  function rankedCareers() { return D.CAREERS.map(careerAnalysis).sort((a, b) => b.total - a.total); }
   function priorityCareers() {
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like");
     if (liked.length) return liked;
     return rankedCareers().filter(x => S.careerFb[x.c.name] !== "no").slice(0, 3).map(x => x.c);
   }
 
-  /* ================= TÍNH TOÁN – BƯỚC 4 ================= */
+  /* ================= BƯỚC 4 ================= */
   function subjInterest() {
     const hs = hollandStats(), gs = gardnerStats(); const raw = {};
     D.SUBJECT_ORDER.forEach(s => {
       let v = 0.3;
-      if (hs.done) Object.keys(D.HOLLAND_SUBJ).forEach(L => v += 0.5 * (hs.sc[L] / 36) * (D.HOLLAND_SUBJ[L][s] || 0));
+      if (hs.answered) Object.keys(D.HOLLAND_SUBJ).forEach(L => v += 0.5 * (hs.sc[L] / 36) * (D.HOLLAND_SUBJ[L][s] || 0));
       if (gs.answered) Object.keys(D.GARDNER_SUBJ).forEach(k => v += 0.3 * clamp((gs.sc[k] - 3) / 12, 0, 1) * (D.GARDNER_SUBJ[k][s] || 0));
       if (S.profile.liked.includes(s)) v += 0.35;
-      if (S.profile.disliked.includes(s)) v -= 0.5;
       raw[s] = v;
     });
-    const mx = Math.max(...Object.values(raw), 0.01);
-    const out = {}; for (const s in raw) out[s] = clamp(raw[s] / mx, 0, 1);
+    const mx = Math.max(...Object.values(raw), 0.01); const out = {}; for (const s in raw) out[s] = clamp(raw[s] / mx, 0, 1);
     return out;
   }
-  function openedToHop(subs) {
-    return Object.keys(D.TO_HOP).filter(k => D.TO_HOP[k].sel.every(s => subs.includes(s)));
-  }
+  const openedToHop = subs => Object.keys(D.TO_HOP).filter(k => D.TO_HOP[k].sel.every(s => subs.includes(s)));
   function validate(subs, cd, school) {
     const issues = [];
-    const uniq = new Set(subs);
-    const r1 = subs.length === 4 && uniq.size === 4 && subs.every(s => D.SUBJECTS[s]);
-    if (!r1) issues.push("Cần chọn đúng 4 môn khác nhau trong 9 môn lựa chọn (TT 13/2022).");
+    const r1 = subs.length === 4 && new Set(subs).size === 4 && subs.every(s => D.SUBJECTS[s]);
+    if (!r1) issues.push("Cần đúng 4 môn khác nhau trong 9 môn lựa chọn (TT 13/2022).");
     let r2 = null;
-    if (cd) { r2 = cd.length === 3 && new Set(cd).size === 3 && cd.every(k => D.CHUYEN_DE[k]); if (!r2) issues.push("Cần chọn 3 cụm chuyên đề của 3 môn khác nhau."); }
-    let r3 = null, offered = null;
-    if (school) { offered = school.combos.find(c => comboKey(c.subjects) === comboKey(subs)) || null; r3 = !!offered; if (!r3) issues.push("Tổ hợp này không có trong danh sách của " + school.name + "."); }
-    return { r1, r2, r3, offered, issues, ok: issues.length === 0 };
+    if (cd && cd.length) { r2 = cd.length === 3 && new Set(cd).size === 3 && cd.every(k => D.CHUYEN_DE[k]); if (!r2) issues.push("Cần 3 cụm chuyên đề của 3 môn khác nhau."); }
+    let r3 = null;
+    if (school) { r3 = !!school.combos.find(c => comboKey(c.subjects) === comboKey(subs)); if (!r3) issues.push("Tổ hợp không có trong danh sách của " + school.name + "."); }
+    return { r1, r2, r3, issues, ok: !issues.length };
   }
   function analyzeCombo(subs, cd, school) {
     const v = validate(subs, cd, school);
     const opened = openedToHop(subs);
     const nonTrivial = opened.filter(k => (D.TO_HOP[k].sel.length > 0 && (!D.TO_HOP[k].bonus || subs.includes(D.TO_HOP[k].bonus))) || (D.TO_HOP[k].bonus && subs.includes(D.TO_HOP[k].bonus)));
-    const pcs = priorityCareers();
-    const careerRows = pcs.map(c => {
-      const op = c.th.filter(k => opened.includes(k));
-      const strong = c.th.filter(k => nonTrivial.includes(k));
-      return { c, op, strong, fit: c.th.length ? 0.5 * (strong.length ? 1 : 0) + 0.5 * (op.length / c.th.length) : 0 };
-    });
+    const careerRows = priorityCareers().map(c => { const op = c.th.filter(k => opened.includes(k)); const strong = c.th.filter(k => nonTrivial.includes(k)); return { c, op, strong, fit: c.th.length ? 0.5 * (strong.length ? 1 : 0) + 0.5 * (op.length / c.th.length) : 0 }; });
     const fitCareer = careerRows.length ? avg(careerRows.map(r => r.fit)) : 0.5;
     const ab = avg(subs.map(s => grade(D.SUBJECTS[s].thcs)));
-    const ability = ab == null ? 0.7 : ab / 10;
-    const inter = subjInterest(); const interest = avg(subs.map(s => inter[s]));
-    const flex = Math.min(nonTrivial.length, 9) / 9;
-    let cons = 1; const consNotes = [];
-    S.constraints.must.forEach(m => { if (!subs.includes(m)) { cons -= 0.5; consNotes.push("Thiếu môn bắt buộc phải có: " + subjName(m)); } });
-    const exc = S.constraints.exclude.filter(e => subs.includes(e));
-    if (exc.length) { cons = 0; consNotes.push("Có môn bạn không muốn học: " + exc.map(subjName).join(", ")); }
-    const tp = tpbStats();
-    if (tp.combo && comboKey(tp.combo.subjects) === comboKey(subs) && tp.m.ATT != null) { cons = (Math.max(cons, 0) + avg([tp.m.ATT, tp.m.SN, tp.m.PBC]) / 5) / 2; consNotes.push("Đã tính điểm TPB cho phương án này."); }
-    cons = clamp(cons, 0, 1);
-    const parts = { career: Math.round(35 * fitCareer), ability: Math.round(25 * ability), interest: Math.round(20 * interest), flex: Math.round(10 * flex), cons: Math.round(10 * cons) };
-    const total = parts.career + parts.ability + parts.interest + parts.flex + parts.cons;
+    const inter = subjInterest();
+    const parts = { career: Math.round(40 * fitCareer), ability: Math.round(30 * (ab == null ? 0.7 : ab / 10)), interest: Math.round(20 * avg(subs.map(s => inter[s]))), flex: Math.round(10 * Math.min(nonTrivial.length, 9) / 9) };
+    const mustMissing = S.constraints.must.filter(m => !subs.includes(m));
+    const notes = mustMissing.length ? ["Thiếu môn bắt buộc phải có: " + mustMissing.map(subjName).join(", ")] : [];
+    const disliked = subs.filter(s => S.profile.disliked.includes(s));
+    const total = Math.max(0, parts.career + parts.ability + parts.interest + parts.flex - 10 * mustMissing.length);
     const risks = [];
-    subs.forEach(s => { const g = grade(D.SUBJECTS[s].thcs); if (g != null && g < 6.5) risks.push(`${subjName(s)}: kết quả lớp 9 còn thấp (${fmt(g)}) – cần kế hoạch củng cố.`); });
-    subs.filter(s => S.profile.disliked.includes(s)).forEach(s => risks.push(`${subjName(s)}: là môn bạn không thích – dễ giảm động lực.`));
+    subs.forEach(s => { const g = grade(D.SUBJECTS[s].thcs); if (g != null && g < 6.5) risks.push(`${subjName(s)}: kết quả lớp 9 còn thấp (${gradeText(D.SUBJECTS[s].thcs)}) – cần kế hoạch củng cố.`); });
     if (["li", "hoa", "sinh"].every(s => subs.includes(s))) risks.push("Có cả Lí, Hoá, Sinh: khối lượng khoa học tự nhiên nặng, cần quỹ thời gian tự học tốt.");
     if (subs.includes("an") || subs.includes("mt")) risks.push("Âm nhạc/Mĩ thuật không phải môn thi tốt nghiệp – cân nhắc nếu không theo khối năng khiếu.");
     const exam = ["Ngoại ngữ", "Lịch sử"].concat(subs.filter(s => D.SUBJECTS[s].examable).map(subjName));
-    return { subs, cd, v, opened, nonTrivial, careerRows, parts, total, risks, exam, consNotes };
+    return { subs, cd, v, opened, nonTrivial, careerRows, parts, total, risks, exam, notes, disliked, mustMissing };
   }
-  function rankSchoolCombos(school) {
-    return school.combos.map(c => ({ combo: c, a: analyzeCombo(c.subjects, c.cd, school) })).sort((x, y) => y.a.total - x.a.total);
+  // Chỉ dùng tổ hợp trường công bố; loại hẳn tổ hợp có môn không muốn học; phù hợp nhất lên đầu
+  function recommendForSchool(school) {
+    const all = school.combos.map(c => ({ combo: c, a: analyzeCombo(c.subjects, c.cd, school) }));
+    const ok = all.filter(x => !x.a.disliked.length).sort((x, y) => y.a.total - x.a.total);
+    const blocked = all.filter(x => x.a.disliked.length).sort((x, y) => x.a.disliked.length - y.a.disliked.length || y.a.total - x.a.total);
+    return { ok, blocked };
   }
 
-  /* ================= TÓM TẮT (dùng cho phiếu & chatbot) ================= */
-  function summaryText() {
-    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), tp = tpbStats();
-    const sch = findSchool(p.schoolId); const st = strengthLists();
-    const lines = [];
-    lines.push("[MÃ HỒ SƠ – Cổng thông tin tư vấn học sinh]");
-    lines.push("Ngày: " + new Date().toLocaleDateString("vi-VN") + " | Vai trò: " + (ROLE_NAME[S.role] || "chưa chọn") + " | Trường: " + (sch ? sch.name : (p.schoolOther || "chưa nhập")));
-    lines.push("B1: mạnh " + (st.strong.join(", ") || "–") + " | cần cố gắng " + (st.weak.join(", ") || "–") + " | nguyện vọng: " + (p.wish || "–"));
-    lines.push("B2: Holland " + (hs.answered ? hollandLabel(hs) : "–") + " | 4 chiều " + (ps.answered ? ps.type : "–") + " | Gardner " + (gs.answered ? gs.top.map(k => D.GARDNER.find(g => g.key === k).name).join(", ") : "–") + " | TPB " + (tp.answered ? `ATT ${fmt(tp.m.ATT)}/SN ${fmt(tp.m.SN)}/PBC ${fmt(tp.m.PBC)}/INT ${fmt(tp.m.INT)}` : "–"));
-    const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like").map(c => c.name);
-    lines.push("B3: ngành ưu tiên " + (liked.join(", ") || "chưa chọn"));
-    lines.push("B4: danh sách cân nhắc " + (S.shortlist.length ? S.shortlist.map(k => k.split("|")[1].split("+").map(subjShort).join("-")).join("; ") : "–"));
-    const fc = finalCombo();
-    lines.push("B6: phương án chốt " + (fc ? comboLabel(fc.subjects) : "–"));
-    const lt = S.tracking[S.tracking.length - 1];
-    lines.push("B7: lần theo dõi gần nhất " + (lt ? lt.period : "–"));
-    return lines.join("\n");
+  /* ================= THÔNG TIN CÒN THIẾU ================= */
+  function missingFields() {
+    const p = S.profile, m = [];
+    const add = (step, t) => m.push({ step, t });
+    if (!String(p.code || "").trim()) add(1, "Mã học sinh");
+    if (!p.nickname) add(1, "Tên gọi");
+    if (!p.schoolId || (p.schoolId === "__other" && !p.schoolOther)) add(1, "Trường THPT");
+    ["toan", "van", "anh"].forEach(k => { if (grade(k) == null) add(1, "Điểm lớp 9 – " + thcsName(k)); });
+    if (["khtn_li", "khtn_hoa", "khtn_sinh"].every(k => grade(k) == null)) add(1, "Điểm lớp 9 – KHTN");
+    if (!p.wish) add(1, "Nguyện vọng ngành/nghề");
+    const hs = hollandStats(), ps = persStats(), gs = gardnerStats();
+    if (!hs.done) add(2, `Trắc nghiệm Holland (${hs.answered}/54)`);
+    if (!ps.done) add(2, `Tính cách 4 chiều (${ps.answered}/16)`);
+    if (!gs.done) add(2, `Đa trí tuệ (${gs.answered}/24)`);
+    if (!Object.values(S.careerFb).includes("like")) add(3, "Chưa đánh dấu ngành “Thích”");
+    if (!S.shortlist.length) add(4, "Chưa có phương án trong danh sách cân nhắc");
+    if (!S.final.checks.talked) add(5, "Chưa xác nhận đã trao đổi với giáo viên, cha mẹ");
+    if (!S.final.confirmed) add(6, "Chưa chốt phương án chính thức");
+    if (!S.tracking.length) add(7, "Chưa có lần theo dõi");
+    return m;
   }
+
+  /* ================= TÓM TẮT ================= */
   function finalCombo() {
     if (!S.final.comboKey) return null;
     const sch = findSchool(S.final.schoolId);
     if (sch) { const c = sch.combos.find(c => comboKey(c.subjects) === S.final.comboKey); if (c) return c; }
     return { subjects: S.final.comboKey.split("+"), cd: S.final.cd || [] };
+  }
+  function schoolName() { const p = S.profile, sch = findSchool(p.schoolId); return sch ? sch.name : (p.schoolOther || ""); }
+  function summaryText() {
+    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
+    const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like").map(c => c.name);
+    const fc = finalCombo(), lt = S.tracking[S.tracking.length - 1];
+    return ["[MÃ HỒ SƠ – Cổng thông tin tư vấn học sinh]",
+      "Ngày: " + new Date().toLocaleDateString("vi-VN") + " | Mã HS: " + (p.code || "–") + " | Vai trò: " + (ROLE_NAME[S.role] || "chưa chọn") + " | Trường: " + (schoolName() || "chưa nhập"),
+      "B1: mạnh " + (st.strong.join(", ") || "–") + " | cần cố gắng " + (st.weak.join(", ") || "–") + " | nguyện vọng: " + (p.wish || "–"),
+      "B2: Holland " + (hs.answered ? hs.code + (hs.done ? "" : " (chưa đủ)") : "–") + " | 4 chiều " + (ps.answered ? ps.type : "–") + " | Gardner " + (gs.answered ? gs.top.map(gName).join(", ") : "–"),
+      "B3: ngành ưu tiên " + (liked.join(", ") || "chưa chọn"),
+      "B4: danh sách cân nhắc " + (S.shortlist.length ? S.shortlist.map(k => k.split("|")[1].split("+").map(subjShort).join("-")).join("; ") : "–"),
+      "B6: phương án chốt " + (fc ? comboLabel(fc.subjects) : "–"),
+      "B7: lần theo dõi gần nhất " + (lt ? lt.period : "–")].join("\n");
   }
 
   /* ================= KHUNG: STEPPER ================= */
@@ -229,14 +290,14 @@
     { n: 1, t: "Thu thập dữ liệu nền", s: "Hồ sơ học sinh" },
     { n: 2, t: "Tâm lý – năng lực – sở thích", s: "Trắc nghiệm" },
     { n: 3, t: "Khám phá nghề nghiệp", s: "Ngành nghề tiềm năng" },
-    { n: 4, t: "Gợi ý tổ hợp tại trường", s: "3–5 phương án" },
-    { n: 5, t: "Tư vấn GV – cha mẹ – HS", s: "Phiếu tóm tắt", human: true },
+    { n: 4, t: "Gợi ý tổ hợp tại trường", s: "Theo danh sách của trường" },
+    { n: 5, t: "Tư vấn GV – cha mẹ – HS", s: "Phiếu tóm tắt" },
     { n: 6, t: "Chốt nguyện vọng", s: "Kiểm tra hợp lệ" },
-    { n: 7, t: "Theo dõi – điều chỉnh", s: "Cảnh báo sớm" }
+    { n: 7, t: "Theo dõi – điều chỉnh", s: "Lưu hồ sơ, cảnh báo sớm" }
   ];
   function stepDone(n) {
     switch (n) {
-      case 1: return !!(S.profile.nickname || S.profile.schoolId || Object.keys(S.profile.grades).length);
+      case 1: return !!(S.profile.code || S.profile.nickname || Object.keys(S.profile.grades).length);
       case 2: return hollandStats().done;
       case 3: return Object.values(S.careerFb).includes("like");
       case 4: return S.shortlist.length > 0;
@@ -247,18 +308,14 @@
     return false;
   }
   function renderSteps() {
-    $("#steps").innerHTML = '<div class="steps-inner"><ol>' + STEPS.map(st => `<li><button type="button" class="step-btn ${stepDone(st.n) ? "done" : ""} ${S.step === st.n ? "current" : ""} ${st.human ? "human" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
-      <span class="step-num">${st.n}</span><span class="step-label">${esc(st.t)}<small>${esc(st.s)}</small></span></button></li>`).join("") +
-      `</ol></div>`;
+    $("#steps").innerHTML = "<ol>" + STEPS.map(st => { const d = stepDone(st.n); return `<li><button type="button" class="step-btn ${S.step === st.n ? "current" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
+      <span class="step-num">${st.n}${d ? '<span class="step-done" title="Đã có dữ liệu">✓</span>' : ""}</span><span class="step-label">${esc(st.t)}<small>${esc(st.s)}</small></span></button></li>`; }).join("") + "</ol>";
     const pill = $("#rolePill");
     if (S.role) { pill.hidden = false; pill.textContent = ROLE_NAME[S.role]; } else pill.hidden = true;
+    const tb = $("#teacherBtn"); if (tb) tb.textContent = SRV.on && SRV.token ? "Giáo viên ✓" : "Giáo viên";
   }
-  function stepHead(n, title, desc) {
-    return `<div class="step-head"><span class="big-num" aria-hidden="true">${n}</span><div><h2>Bước ${n}: ${esc(title)}</h2><p>${desc}</p></div></div>`;
-  }
-  function navRow(prev, next, nextLabel) {
-    return `<div class="nav-row">${prev != null ? `<button class="btn ghost" type="button" data-go="${prev}">Quay lại</button>` : "<span></span>"}${next != null ? `<button class="btn" type="button" data-go="${next}">${esc(nextLabel || "Sang bước " + next)}</button>` : ""}</div>`;
-  }
+  const stepHead = (n, title, desc) => `<div class="step-head"><span class="big-num" aria-hidden="true">${n}</span><div><h2>Bước ${n}: ${esc(title)}</h2><p>${desc}</p></div></div>`;
+  const navRow = (prev, next, nextLabel) => `<div class="nav-row">${prev != null ? `<button class="btn ghost" type="button" data-go="${prev}">Quay lại</button>` : "<span></span>"}${next != null ? `<button class="btn" type="button" data-go="${next}">${esc(nextLabel || "Sang bước " + next)}</button>` : ""}</div>`;
 
   /* ================= TRANG ĐẦU ================= */
   function viewWelcome() {
@@ -270,18 +327,19 @@
           <p class="lead">Lớp 10 cần chọn 4 trong 9 môn học lựa chọn và học ổn định đến hết lớp 12. Cổng thông tin tư vấn học sinh đồng hành cùng bạn qua 7 bước, từ hiểu bản thân đến chốt tổ hợp phù hợp với trường.</p>
           <h3>Bạn là ai?</h3>
           <div class="role-cards">
-            ${["hs", "ph", "gv"].map(r => `<button type="button" class="role-card" data-action="role" data-role="${r}" aria-pressed="${S.role === r}"><strong>${ROLE_NAME[r]}</strong><span>${{ hs: "Tự khám phá và chọn tổ hợp", ph: "Đồng hành cùng con", gv: "Hỗ trợ tư vấn cho học sinh" }[r]}</span></button>`).join("")}
+            ${["hs", "ph", "gv"].map(r => `<button type="button" class="role-card" data-action="role" data-role="${r}" aria-pressed="${S.role === r}"><strong>${ROLE_NAME[r]}</strong><span>${{ hs: "Tự khám phá và chọn tổ hợp", ph: "Đồng hành cùng con", gv: "Hỗ trợ tư vấn, quản lý hồ sơ" }[r]}</span></button>`).join("")}
           </div>
           <div class="row">
             <button class="btn" type="button" data-go="1" ${S.role ? "" : "disabled"}>${hasData ? "Tiếp tục hồ sơ" : "Bắt đầu Bước 1"}</button>
-            <button class="btn ghost" type="button" data-action="open-profile-code">${RECORDS_URL ? "Mở hồ sơ bằng mã phiếu" : "Lưu / tải mã hồ sơ"}</button>
+            <button class="btn ghost" type="button" data-action="open-profile-code">Nhập mã hồ sơ đã lưu</button>
+            ${S.role === "gv" ? `<button class="btn ghost" type="button" data-go="8">Khu vực giáo viên</button>` : ""}
           </div>
           ${S.role ? "" : '<p class="small muted" style="margin-top:8px">Chọn vai trò để trợ lý tư vấn xưng hô cho phù hợp.</p>'}
         </div>
         <div>
           <p class="hand">Thử ngay: chạm 4 ô để xem tổ hợp xét tuyển nào được mở.</p>
-          ${boardHTML(S.ui.heroPick || [], "hero")}
-          <div class="doors" id="heroDoors">${heroDoors(S.ui.heroPick || [])}</div>
+          ${boardHTML(S.ui.heroPick || [])}
+          <div class="doors">${heroDoors(S.ui.heroPick || [])}</div>
         </div>
       </div>
       <hr class="rule">
@@ -292,10 +350,10 @@
       </div>
     </section>`;
   }
-  function boardHTML(picked, scope, opts = {}) {
+  function boardHTML(picked) {
     return `<div class="board" role="group" aria-label="9 môn học lựa chọn">${D.SUBJECT_ORDER.map(k => {
       const s = D.SUBJECTS[k], on = picked.includes(k), dis = !on && picked.length >= 4;
-      return `<button type="button" class="tile" style="--c:${s.color}" data-action="tile" data-scope="${scope}" data-k="${k}" aria-pressed="${on}" ${dis ? "disabled" : ""}>${esc(s.name)}<small>${s.examable ? "Được chọn thi TN" : "Không thi TN"}</small></button>`;
+      return `<button type="button" class="tile" style="--c:${s.color}" data-action="tile" data-k="${k}" aria-pressed="${on}" ${dis ? "disabled" : ""}>${esc(s.name)}<small>${s.examable ? "Được chọn thi TN" : "Không thi TN"}</small></button>`;
     }).join("")}</div>`;
   }
   function heroDoors(p) {
@@ -309,23 +367,28 @@
 
   /* ================= BƯỚC 1 ================= */
   function viewStep1() {
-    const p = S.profile, sch = allSchools();
-    const st = strengthLists();
+    const p = S.profile, st = strengthLists();
     const sel = (path, opts) => `<select data-bind="${path}">${opts.map(o => `<option value="${esc(o)}" ${getPath(path) === o ? "selected" : ""}>${esc(o || "– Chọn –")}</option>`).join("")}</select>`;
     return `<section class="sheet">
       ${stepHead(1, "Thu thập dữ liệu nền", T("Cho mình biết một chút về bạn. Chỉ cần tên gọi, không cần họ tên đầy đủ. Các câu hỏi về gia đình có thể bỏ qua.", "Nhập thông tin của học sinh. Chỉ cần tên gọi, không cần họ tên đầy đủ. Các câu hỏi về gia đình có thể bỏ qua."))}
       <fieldset><legend>Thông tin chung</legend>
         <div class="grid-3">
+          <div class="field"><label for="f-code">Mã học sinh</label>
+            <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="f-code" type="text" data-bind="profile.code" value="${esc(p.code)}" placeholder="VD: 0123456789" autocomplete="off"><button type="button" class="btn ghost small" data-action="load-by-code" title="Mở hồ sơ đã lưu theo mã">Mở</button></div>
+            <span class="hint">Nhập tay. Dùng để lưu hồ sơ và khớp kết quả khảo sát Google Form.</span></div>
           <div class="field"><label for="f-nick">Tên gọi</label><input id="f-nick" type="text" data-bind="profile.nickname" value="${esc(p.nickname)}" placeholder="VD: Minh"></div>
+          <div class="field"><label for="f-class">Lớp</label><input id="f-class" type="text" data-bind="profile.className" value="${esc(p.className)}" placeholder="VD: 10A3"></div>
           <div class="field"><label for="f-school">Trường THPT</label>
-            <select id="f-school" data-bind="profile.schoolId" data-rerender="1"><option value="">– Chọn trường –</option>${sch.map(s => `<option value="${s.id}" ${p.schoolId === s.id ? "selected" : ""}>${esc(s.name)}</option>`).join("")}<option value="__other" ${p.schoolId === "__other" ? "selected" : ""}>Trường khác…</option></select></div>
+            <select id="f-school" data-bind="profile.schoolId" data-rerender="1"><option value="">– Chọn trường –</option>${allSchools().map(s => `<option value="${s.id}" ${p.schoolId === s.id ? "selected" : ""}>${esc(s.name)}</option>`).join("")}<option value="__other" ${p.schoolId === "__other" ? "selected" : ""}>Trường khác…</option></select></div>
           <div class="field"><label for="f-prov">Tỉnh/thành</label><input id="f-prov" type="text" data-bind="profile.province" value="${esc(p.province)}" placeholder="VD: Hà Nội"></div>
         </div>
-        ${p.schoolId === "__other" ? `<div class="field" style="margin-top:10px"><label for="f-other">Tên trường</label><input id="f-other" type="text" data-bind="profile.schoolOther" value="${esc(p.schoolOther)}" placeholder="VD: THPT …"><span class="hint">Bản có AI sẽ tự tra cứu tổ hợp môn của trường trên web. Ở bản demo, bạn nhập danh sách tổ hợp của trường ở Bước 4.</span></div>` : ""}
+        ${p.schoolId === "__other" ? `<div class="field" style="margin-top:10px"><label for="f-other">Tên trường</label><input id="f-other" type="text" data-bind="profile.schoolOther" value="${esc(p.schoolOther)}" placeholder="VD: THPT …"><span class="hint">Thêm danh sách tổ hợp của trường ở Bước 4 (lấy từ website trường hoặc nhập tay).</span></div>` : ""}
       </fieldset>
-      <fieldset><legend>Kết quả học tập lớp 9 (thang 10)</legend>
-        <p class="small muted">Nhập điểm trung bình cả năm nếu nhớ; bỏ trống môn không nhớ.</p>
-        <div class="grades">${D.THCS.map(s => `<div class="field"><label for="g-${s.key}">${esc(s.name)}</label><input id="g-${s.key}" type="number" min="0" max="10" step="0.1" inputmode="decimal" data-bind="profile.grades.${s.key}" value="${esc(p.grades[s.key] ?? "")}"></div>`).join("")}</div>
+      <fieldset><legend>Kết quả học tập lớp 9</legend>
+        <p class="small muted">Nhập điểm trung bình cả năm (thang 10). Âm nhạc, Mĩ thuật đánh giá Đạt / Chưa đạt. Bỏ trống môn không nhớ.</p>
+        <div class="grades">${D.THCS.map(s => s.passFail
+          ? `<div class="field"><label for="g-${s.key}">${esc(s.name)}</label><select id="g-${s.key}" data-bind="profile.grades.${s.key}" style="width:120px">${["", "Đạt", "Chưa đạt"].map(o => `<option value="${o}" ${(p.grades[s.key] || "") === o ? "selected" : ""}>${o || "–"}</option>`).join("")}</select></div>`
+          : `<div class="field"><label for="g-${s.key}">${esc(s.name)}</label><input id="g-${s.key}" type="number" min="0" max="10" step="0.1" inputmode="decimal" data-bind="profile.grades.${s.key}" value="${esc(p.grades[s.key] ?? "")}"></div>`).join("")}</div>
         <div class="grid-2" style="margin-top:12px">
           <div class="field"><label for="f-exam">Tổng điểm thi vào lớp 10 (nếu có)</label><input id="f-exam" type="text" data-bind="profile.exam10" value="${esc(p.exam10)}"></div>
           <div class="field"><label for="f-tal">Năng khiếu, giải thưởng, câu lạc bộ</label><input id="f-tal" type="text" data-bind="profile.talents" value="${esc(p.talents)}" placeholder="VD: CLB robot, giải vẽ cấp quận"></div>
@@ -333,7 +396,8 @@
       </fieldset>
       <fieldset><legend>Sở thích môn học</legend>
         <div class="field"><span class="label">${T("Môn lựa chọn bạn thích", "Môn lựa chọn học sinh thích")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="profile.liked" data-k="${k}" aria-pressed="${p.liked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
-        <div class="field" style="margin-top:12px"><span class="label">${T("Môn bạn không muốn học", "Môn học sinh không muốn học")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" aria-pressed="${p.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
+        <div class="field" style="margin-top:12px"><span class="label">${T("Môn bạn không muốn học", "Môn học sinh không muốn học")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" aria-pressed="${p.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div>
+          <span class="hint">Tổ hợp có môn này sẽ không được gợi ý ở Bước 4.</span></div>
       </fieldset>
       <fieldset><legend>Điều kiện (không bắt buộc)</legend>
         <div class="grid-2">
@@ -352,9 +416,10 @@
       </fieldset>
       <div class="callout info">
         <h4>Hồ sơ học sinh (H1)</h4>
-        <p><b>Môn mạnh (≥ 8):</b> ${esc(st.strong.join(", ") || "chưa có dữ liệu")}<br>
-        <b>Trung bình (6,5–7,9):</b> ${esc(st.mid.join(", ") || "–")}<br>
-        <b>Cần cố gắng (&lt; 6,5):</b> ${esc(st.weak.join(", ") || "–")}<br>
+        <p><b>Mã HS:</b> ${esc(p.code || "chưa nhập")} · <b>Lớp:</b> ${esc(p.className || "–")}<br>
+        <b>Môn mạnh (≥ 8):</b> ${esc(st.strong.join(", ") || "chưa có dữ liệu")}<br>
+        <b>Trung bình:</b> ${esc(st.mid.join(", ") || "–")}<br>
+        <b>Cần cố gắng:</b> ${esc(st.weak.join(", ") || "–")}<br>
         <b>Nguyện vọng:</b> ${esc(p.wish || "–")} · <b>Gia đình:</b> ${esc(p.familyWish || "–")}</p>
       </div>
       ${navRow(0, 2)}
@@ -364,17 +429,12 @@
   /* ================= BƯỚC 2 ================= */
   function viewStep2() {
     const tab = S.ui.testTab;
-    const hs = hollandStats(), ps = persStats(), gs = gardnerStats(), tp = tpbStats();
-    const tabs = [["holland", "Holland", `${hs.answered}/54`], ["pers", "Tính cách 4 chiều", `${ps.answered}/16`], ["gardner", "Đa trí tuệ", `${gs.answered}/24`], ["tpb", "TPB", `${tp.answered}/${tp.total}`], ["result", "Báo cáo", ""]];
-    let body = "";
-    if (tab === "holland") body = testHolland(hs);
-    else if (tab === "pers") body = testPers(ps);
-    else if (tab === "gardner") body = testGardner(gs);
-    else if (tab === "tpb") body = testTPB(tp);
-    else body = reportH2();
+    const hs = hollandStats(), ps = persStats(), gs = gardnerStats();
+    const tabs = [["holland", "Holland", `${hs.answered}/54`], ["pers", "Tính cách 4 chiều", `${ps.answered}/16`], ["gardner", "Đa trí tuệ", `${gs.answered}/24`], ["result", "Báo cáo", ""]];
+    const body = tab === "pers" ? testPers(ps) : tab === "gardner" ? testGardner(gs) : tab === "result" ? reportH2() : testHolland(hs);
     return `<section class="sheet">
       ${stepHead(2, "Đánh giá tâm lý – năng lực – sở thích", "Không có câu đúng hay sai. Kết quả chỉ để tham khảo, giúp hiểu bản thân hơn – không phải chẩn đoán.")}
-      <div class="tabs" role="tablist">${tabs.map(([k, n, c]) => `<button type="button" class="tab" role="tab" aria-selected="${tab === k}" data-action="test-tab" data-tab="${k}">${n}${c ? `<span class="count">${c}</span>` : ""}</button>`).join("")}</div>
+      <div class="tabs" role="tablist">${tabs.map(([k, n, c]) => `<button type="button" class="tab" role="tab" aria-selected="${(tab || "holland") === k}" data-action="test-tab" data-tab="${k}">${n}${c ? `<span class="count">${c}</span>` : ""}</button>`).join("")}</div>
       ${body}
       ${navRow(1, 3)}
     </section>`;
@@ -404,47 +464,30 @@
       </div>`).join("")}
       <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="gardner">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${gs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="result">Xem báo cáo</button>` : ""}</div>`;
   }
-  function testTPB(tp) {
-    const c = tp.combo;
-    const X = c ? comboLabel(c.subjects) : "[X]";
-    return `<p>Thang đo theo Thuyết hành vi có kế hoạch (TPB) cho <b>một tổ hợp cụ thể</b>. Nên làm sau khi có phương án ở Bước 4. <span class="muted small">Bản dùng tạm, sẽ chuẩn hóa sau.</span></p>
-      <div class="field" style="max-width:520px;margin-bottom:12px"><span class="label">Tổ hợp đang đánh giá</span>
-        ${c ? `<div class="row">${miniTiles(c.subjects)}<button type="button" class="btn ghost small" data-action="tpb-clear">Đổi tổ hợp</button></div>` : boardHTML(S.ui.tpbPick || [], "tpb") + `<p class="small muted">Chạm chọn 4 môn để đặt tổ hợp cần đánh giá, hoặc bấm “Đánh giá TPB” trên một phương án ở Bước 4.</p>`}
-      </div>
-      ${c ? `<p class="scale-legend">1 Hoàn toàn không đồng ý · 2 Không đồng ý · 3 Phân vân · 4 Đồng ý · 5 Hoàn toàn đồng ý</p>${prog(tp.answered, tp.total)}
-      ${D.TPB.map(g => `<div class="q-group"><h4>${g.key} – ${esc(g.name)} <span class="muted small">(TB ${fmt(tp.m[g.key])})</span></h4>
-        ${g.items.map((it, i) => `<div class="q"><span class="q-text">${esc(it.replace("[X]", X))}</span><span class="scale">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-action="tpb" data-k="${g.key}" data-i="${i}" data-v="${v}" data-fid="tpb-${g.key}-${i}-${v}" aria-pressed="${S.tests.tpb.ans[g.key][i] === v}" title="${D.AGREE5[v - 1]}">${v}</button>`).join("")}</span></div>`).join("")}</div>`).join("")}
-      ${tp.answered ? tpbPatterns(tp.m).map(x => `<div class="callout ${x.k}"><p>${esc(x.t)}</p></div>`).join("") : ""}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="tpb">Điền ngẫu nhiên (để thử demo)</button></div>` : ""}`;
-  }
-  function bars(rows, max) {
-    return `<div class="bars">${rows.map(([lab, val]) => `<div class="bar"><span>${esc(lab)}</span><span class="bar-track"><span class="bar-fill" style="width:${clamp(val / max * 100, 0, 100)}%"></span></span><span class="bar-val">${val}</span></div>`).join("")}</div>`;
-  }
+  const bars = (rows, max) => `<div class="bars">${rows.map(([lab, val]) => `<div class="bar"><span>${esc(lab)}</span><span class="bar-track"><span class="bar-fill" style="width:${clamp(val / max * 100, 0, 100)}%"></span></span><span class="bar-val">${val}</span></div>`).join("")}</div>`;
   function reportH2() {
-    const hs = hollandStats(), ps = persStats(), gs = gardnerStats(), tp = tpbStats(), st = strengthLists();
+    const hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
     if (!hs.answered && !ps.answered && !gs.answered) return `<div class="callout info"><p>Chưa có dữ liệu. Hãy bắt đầu với tab Holland.</p></div>`;
-    const top = hs.done && hs.sc[hs.order[0]] > hs.sc[hs.order[1]] ? D.HOLLAND.find(g => g.key === hs.order[0]) : null;
-    const gNames = gs.top.map(k => D.GARDNER.find(g => g.key === k).name);
+    const top = hs.order[0] ? D.HOLLAND.find(g => g.key === hs.order[0]) : null;
     const groups = [...new Set(rankedCareers().slice(0, 6).map(x => x.c.group))];
     return `<h3>Báo cáo tâm lý – năng lực (H2)</h3><p class="muted small">Chỉ mang tính tham khảo.</p>
       <div class="grid-2">
         <div><h4>1. Sở thích nghề nghiệp (Holland)</h4>
-          ${hs.answered ? `<div class="code-big">${hollandLabel(hs)}</div>${hs.done ? "" : `<p class="small muted">Mới có ${hs.answered}/54 câu hợp lệ${hs.invalid.length ? `; ${hs.invalid.length} câu không hợp lệ` : ""} – chưa có mã kết quả.</p>`}${hs.done && !hs.code ? `<p class="small muted">Đồng điểm ở các nhóm dẫn đầu: ${hs.tieGroups.map(g => g.join("/ ")).join(", ")}. Cần trao đổi thêm trước khi diễn giải mã ba chữ.</p>` : ""}${bars(D.HOLLAND.map(g => [g.key + " – " + g.name.split("–")[1].trim(), hs.sc[g.key]]), 36)}
+          ${hs.answered ? `<div class="code-big">${hs.code}</div>${hs.done ? "" : `<p class="small muted">Mới trả lời ${hs.answered}/54 câu – kết quả chưa đầy đủ.</p>`}${bars(D.HOLLAND.map(g => [g.key + " – " + g.name.split("–")[1].trim(), hs.sc[g.key]]), 36)}
           ${top ? `<p class="small" style="margin-top:10px"><b>${esc(top.name)}:</b> ${esc(top.desc)}</p><p class="small"><b>Ngành nghề gợi ý:</b> ${esc(top.jobs)}</p>` : ""}` : `<p class="muted">Chưa làm.</p>`}
         </div>
         <div><h4>2. Xu hướng tính cách 4 chiều</h4>
           ${ps.answered ? `<div class="code-big" style="font-size:1.8rem">${esc(ps.type)}</div><ul class="small">${D.PERSONALITY.map(p => { const r = ps.res[p.dim]; const L = r.a > r.b ? p.a : r.b > r.a ? p.b : null; return `<li>${esc(p.label)}: ${L ? esc(D.PERSONALITY_DESC[L]) : "cân bằng giữa " + p.a + " và " + p.b}</li>`; }).join("")}</ul>` : `<p class="muted">Chưa làm.</p>`}
           <h4 style="margin-top:16px">3. Trí thông minh nổi trội (Gardner)</h4>
-          ${gs.answered ? `${bars(D.GARDNER.map(g => [g.name, gs.sc[g.key]]), 15)}<p class="small" style="margin-top:8px"><b>Nổi trội:</b> ${esc(gNames.join(", "))}</p>` : `<p class="muted">Chưa làm.</p>`}
+          ${gs.answered ? `${bars(D.GARDNER.map(g => [g.name, gs.sc[g.key]]), 15)}<p class="small" style="margin-top:8px"><b>Nổi trội:</b> ${esc(gs.top.map(gName).join(", "))}</p>` : `<p class="muted">Chưa làm.</p>`}
         </div>
       </div>
       <hr class="rule">
       <div class="grid-2">
         <div><h4>4. Năng lực học tập (từ Bước 1)</h4><p class="small"><b>Mạnh:</b> ${esc(st.strong.join(", ") || "–")}<br><b>Cần cố gắng:</b> ${esc(st.weak.join(", ") || "–")}</p>
           <h4>5. Nhóm ngành gợi ý ban đầu</h4><p class="small">${esc(groups.join(", "))}</p></div>
-        <div><h4>6. TPB</h4>${tp.answered ? `<p class="small">Tổ hợp ${esc(tp.combo ? comboLabel(tp.combo.subjects) : "")}: Thái độ ${level(tp.m.ATT)} (${fmt(tp.m.ATT)}), Chuẩn chủ quan ${level(tp.m.SN)} (${fmt(tp.m.SN)}), Kiểm soát ${level(tp.m.PBC)} (${fmt(tp.m.PBC)}), Ý định ${level(tp.m.INT)} (${fmt(tp.m.INT)}).</p>` : `<p class="small muted">Chưa làm (nên làm sau Bước 4).</p>`}
-          <h4>7. Có cần giáo viên tư vấn thêm?</h4>
-          ${hs.flat ? `<div class="callout warn"><p>Điểm các nhóm sở thích khá sát nhau hoặc đều thấp theo ngưỡng gợi ý của bản demo (heuristic, chưa chuẩn hóa) – nên trao đổi với giáo viên tư vấn.</p></div>` : `<p class="small">${hs.done ? "Ngưỡng gợi ý của bản demo chưa đánh dấu điểm sát nhau hoặc thấp; vẫn nên trao đổi khi phân vân." : "Hoàn thành Holland để xem gợi ý."}</p>`}
+        <div><h4>6. Có cần giáo viên tư vấn thêm?</h4>
+          ${hs.flat ? `<div class="callout warn"><p>Điểm các nhóm sở thích khá sát nhau hoặc đều thấp – nên gặp giáo viên tư vấn để khám phá thêm.</p></div>` : `<p class="small">${hs.done ? "Chưa thấy dấu hiệu cần hỗ trợ thêm." : "Hoàn thành Holland để đánh giá."}</p>`}
         </div>
       </div>`;
   }
@@ -458,33 +501,78 @@
     const show = S.ui.showAllCareers ? list : list.slice(0, 10);
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like");
     return `<section class="sheet">
-      ${stepHead(3, "Khám phá nghề nghiệp – ngành học", T("Danh sách được xếp theo mức phù hợp với sở thích, trí tuệ nổi trội và kết quả học tập của bạn. Hãy đánh dấu ngành bạn thích để mình gợi ý tổ hợp ở Bước 4.", "Danh sách xếp theo mức phù hợp với kết quả trắc nghiệm và học tập của học sinh. Đánh dấu ngành ưu tiên để gợi ý tổ hợp ở Bước 4."))}
-      ${hs.answered ? "" : `<div class="callout warn"><p>Chưa có kết quả Holland nên gợi ý chủ yếu dựa vào điểm học tập. <button type="button" class="btn small ghost" data-go="2">Làm trắc nghiệm</button></p></div>`}
-      <div class="row" style="margin-bottom:14px"><label for="grp" class="small"><b>Lọc theo nhóm ngành</b></label>
-        <select id="grp" data-bind="careerGroup" data-rerender="1" style="max-width:280px"><option value="">Tất cả nhóm ngành</option>${groups.map(g => `<option ${S.careerGroup === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></div>
-      ${show.map(({ c, s }) => `<article class="career">
-        <div class="career-top"><h4>${esc(c.name)}</h4><span class="fit">${s}% phù hợp</span></div>
-        <p class="small" style="margin:4px 0 6px"><span class="tag">${esc(c.group)}</span><span class="tag">Holland ${c.h}</span></p>
-        <p class="small" style="margin-bottom:4px">${esc(c.desc)}</p>
-        <p class="small muted" style="margin:0">Tổ hợp xét tuyển hay gặp: ${c.th.map(k => `<b title="${esc(D.TO_HOP[k].label)}">${k}</b>`).join(", ")} · Môn lựa chọn nên có: ${esc(mustSubjectsText(c))}</p>
-        <div class="fb" role="group" aria-label="Đánh giá ngành">${[["like", "Thích"], ["maybe", "Phân vân"], ["no", "Không hợp"]].map(([v, l]) => `<button type="button" class="${v}" data-action="cfb" data-name="${esc(c.name)}" data-v="${v}" aria-pressed="${S.careerFb[c.name] === v}">${l}</button>`).join("")}</div>
-      </article>`).join("")}
+      ${stepHead(3, "Khám phá nghề nghiệp – ngành học", "Mức phù hợp được tính từ toàn bộ thông tin ở Bước 1 và Bước 2: trắc nghiệm, điểm lớp 9, môn thích và không muốn học, nguyện vọng, mong muốn gia đình, năng khiếu. Bấm “Vì sao gợi ý ngành này?” để xem từng yếu tố.")}
+      ${hs.answered ? "" : `<div class="callout warn"><p>Chưa có kết quả Holland nên phần sở thích đang tạm tính mức trung bình. <button type="button" class="btn small ghost" data-go="2">Làm trắc nghiệm</button></p></div>`}
+      <div class="row" style="margin-bottom:14px">
+        <label for="grp" class="small"><b>Lọc theo nhóm ngành</b></label>
+        <select id="grp" data-bind="careerGroup" data-rerender="1" style="max-width:260px"><option value="">Tất cả nhóm ngành</option>${groups.map(g => `<option ${S.careerGroup === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost small" data-action="toggle-diagram" aria-expanded="${!!S.ui.showDiagram}">${S.ui.showDiagram ? "Ẩn sơ đồ liên kết" : "Xem sơ đồ liên kết"}</button>
+      </div>
+      ${S.ui.showDiagram ? diagramHTML(list.slice(0, 8)) : ""}
+      ${show.map(careerCard).join("")}
       ${list.length > 10 ? `<div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-action="toggle-all-careers">${S.ui.showAllCareers ? "Thu gọn" : "Xem tất cả " + list.length + " ngành"}</button></div>` : ""}
       <hr class="rule">
       <h3>Danh sách ngành nghề tiềm năng (H3)</h3>
       ${liked.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Ngành</th><th>Nhóm</th><th>Phù hợp</th><th>Tổ hợp xét tuyển tham khảo</th><th>Môn lựa chọn nên có</th></tr></thead><tbody>
-        ${liked.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.group)}</td><td>${careerScore(c)}%</td><td>${c.th.join(", ")}</td><td>${esc(mustSubjectsText(c))}</td></tr>`).join("")}</tbody></table></div>
+        ${liked.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.group)}</td><td>${careerAnalysis(c).total}%</td><td>${c.th.join(", ")}</td><td>${esc(mustSubjectsText(c))}</td></tr>`).join("")}</tbody></table></div>
         <p class="small muted" style="margin-top:8px">Tổ hợp xét tuyển thay đổi theo năm và từng trường đại học – cần kiểm tra đề án tuyển sinh mới nhất.</p>`
         : `<p class="muted">Chưa đánh dấu ngành nào. ${hs.flat ? "Nếu vẫn chưa xác định được, nên gặp giáo viên tư vấn thêm." : ""}</p>`}
-      <div class="margin-note small">Gợi ý trải nghiệm: hỏi chuyện người đang làm nghề, tham gia câu lạc bộ, ngày hội tư vấn tuyển sinh, tham quan trường đại học/doanh nghiệp.</div>
       ${navRow(2, 4)}
     </section>`;
   }
-  function mustSubjectsText(c) {
-    const sets = c.th.map(k => D.TO_HOP[k].sel).filter(s => s.length);
-    if (!sets.length) return "không bắt buộc môn lựa chọn (năng khiếu hoặc D01…)";
-    const count = {}; sets.forEach(s => s.forEach(x => count[x] = (count[x] || 0) + 1));
-    return Object.keys(count).sort((a, b) => count[b] - count[a]).map(subjName).join(", ");
+  function careerCard(a) {
+    const c = a.c, open = S.ui.openWhy.includes(c.name);
+    return `<article class="career">
+      <div class="career-top"><h4>${esc(c.name)}</h4><span class="fit">${a.total}% phù hợp</span></div>
+      <p class="small" style="margin:4px 0 6px"><span class="tag">${esc(c.group)}</span><span class="tag">Holland ${c.h}</span></p>
+      <p class="small" style="margin-bottom:4px">${esc(c.desc)}</p>
+      <p class="small muted" style="margin:0">Tổ hợp xét tuyển hay gặp: ${c.th.map(k => `<b title="${esc(D.TO_HOP[k].label)}">${k}</b>`).join(", ")} · Môn lựa chọn nên có: ${esc(mustSubjectsText(c))}</p>
+      <details class="why" data-why="${esc(c.name)}" ${open ? "open" : ""}><summary>Vì sao gợi ý ngành này?</summary>
+        <div class="table-wrap"><table class="t why-t"><thead><tr><th>Yếu tố</th><th>Dữ liệu đã dùng</th><th class="num">Điểm</th></tr></thead><tbody>
+        ${a.rows.map(r => `<tr><td>${esc(r.f)}</td><td>${esc(r.d)}</td><td class="num ${r.v < 0 ? "neg" : ""}">${r.v < 0 ? "−" : "+"}${fmt(Math.abs(r.v), 1)}${r.max ? `<span class="muted">/${r.max}</span>` : ""}</td></tr>`).join("")}
+        <tr class="tot"><td colspan="2">Tổng (tối đa 100)</td><td class="num">${a.total}</td></tr></tbody></table></div>
+        ${a.notes.length ? `<ul class="small why-notes">${a.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+      </details>
+      <div class="fb" role="group" aria-label="Đánh giá ngành">${[["like", "Thích"], ["maybe", "Phân vân"], ["no", "Không hợp"]].map(([v, l]) => `<button type="button" class="${v}" data-action="cfb" data-name="${esc(c.name)}" data-v="${v}" aria-pressed="${S.careerFb[c.name] === v}">${l}</button>`).join("")}</div>
+    </article>`;
+  }
+  function mustSubjectsText(c) { const n = careerNeeds(c).subjects; return n.length ? n.map(subjName).join(", ") : "không bắt buộc môn lựa chọn (năng khiếu hoặc D01…)"; }
+
+  // Sơ đồ liên kết 3 cột: điểm mạnh & sở thích → nhóm ngành → ngành
+  function diagramHTML(top) {
+    const hs = hollandStats(), gs = gardnerStats(), p = S.profile;
+    const left = [];
+    if (hs.answered) hs.order.slice(0, 3).forEach(L => left.push({ label: "Holland " + L, kind: "h", L }));
+    if (gs.answered) gs.top.slice(0, 2).forEach(k => left.push({ label: gName(k), kind: "g", k }));
+    D.THCS.filter(s => !s.passFail && grade(s.key) != null && grade(s.key) >= 8).sort((a, b) => grade(b.key) - grade(a.key)).slice(0, 3)
+      .forEach(s => left.push({ label: s.name.replace("KHTN – mạch ", "").replace("LS&ĐL – phân môn ", "").replace(" (Tiếng Anh)", "") + " " + fmt(grade(s.key)), kind: "s", key: s.key }));
+    p.liked.slice(0, 2).forEach(s => left.push({ label: "Thích " + subjName(s), kind: "l", s }));
+    if (!left.length || !top.length) return `<div class="callout info"><p>Chưa đủ dữ liệu để vẽ sơ đồ. Hãy nhập điểm ở Bước 1 và làm trắc nghiệm ở Bước 2.</p></div>`;
+    const w = [0.5, 0.3, 0.2];
+    const contrib = (node, c) => {
+      if (node.kind === "h") { const i = c.h.indexOf(node.L); return i < 0 ? 0 : w[i] * hs.sc[node.L] / 36 * 35; }
+      if (node.kind === "g") return c.g.includes(node.k) ? clamp((gs.sc[node.k] - 3) / 12, 0, 1) * 15 / c.g.length : 0;
+      if (node.kind === "s") return c.thcs.includes(node.key) ? grade(node.key) / 10 * 25 / c.thcs.length : 0;
+      if (node.kind === "l") return careerNeeds(c).subjects.includes(node.s) ? 5 : 0;
+      return 0;
+    };
+    const groups = [...new Set(top.map(a => a.c.group))];
+    const W = 840, H = Math.max(left.length, groups.length, top.length) * 36 + 40;
+    const x0 = 160, x1 = 370, x2 = 520;
+    const yOf = (i, n) => 26 + (H - 52) * (n === 1 ? 0.5 : i / (n - 1));
+    const lp = []; let maxL = 0;
+    left.forEach((n, i) => groups.forEach((g, j) => { const v = top.filter(a => a.c.group === g).reduce((s, a) => s + contrib(n, a.c), 0); if (v > 0) { lp.push({ i, j, v }); maxL = Math.max(maxL, v); } }));
+    const path = (xa, ya, xb, yb) => `M${xa},${ya} C${(xa + xb) / 2},${ya} ${(xa + xb) / 2},${yb} ${xb},${yb}`;
+    return `<figure class="diagram">
+      <figcaption class="small muted">Cột trái: điểm mạnh và sở thích của ${T("bạn", "học sinh")} · cột giữa: nhóm ngành · cột phải: 8 ngành phù hợp nhất. Nét càng đậm, yếu tố góp càng nhiều điểm.</figcaption>
+      <div class="table-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sơ đồ liên kết giữa điểm mạnh, sở thích và ngành nghề" style="min-width:660px;width:100%">
+        ${lp.map(l => `<path d="${path(x0, yOf(l.i, left.length), x1, yOf(l.j, groups.length))}" class="lk" stroke-width="${(1.5 + 9 * l.v / (maxL || 1)).toFixed(1)}"/>`).join("")}
+        ${top.map((a, k) => `<path d="${path(x1, yOf(groups.indexOf(a.c.group), groups.length), x2, yOf(k, top.length))}" class="lk2" stroke-width="${(1 + 6 * a.total / 100).toFixed(1)}"/>`).join("")}
+        ${left.map((n, i) => `<circle cx="${x0}" cy="${yOf(i, left.length)}" r="5" class="nd"/><text x="${x0 - 10}" y="${yOf(i, left.length) + 4}" text-anchor="end" class="tx">${esc(n.label)}</text>`).join("")}
+        ${groups.map((g, j) => `<rect x="${x1 - 6}" y="${yOf(j, groups.length) - 9}" width="12" height="18" rx="3" class="nd2"/><text x="${x1}" y="${yOf(j, groups.length) - 14}" text-anchor="middle" class="tx tx-g">${esc(g)}</text>`).join("")}
+        ${top.map((a, k) => `<circle cx="${x2}" cy="${yOf(k, top.length)}" r="5" class="nd"/><text x="${x2 + 10}" y="${yOf(k, top.length) + 4}" class="tx">${esc(a.c.name)} – ${a.total}%</text>`).join("")}
+      </svg></div></figure>`;
   }
 
   /* ================= BƯỚC 4 ================= */
@@ -494,64 +582,52 @@
     const pcs = priorityCareers();
     let results = "";
     if (school) {
-      const ranked = rankSchoolCombos(school);
+      const r = recommendForSchool(school);
+      const list = r.ok.length ? r.ok : r.blocked.slice(0, 3);
       results = `<h3 style="margin-top:6px">Phương án đề xuất tại ${esc(school.name)} (H4)</h3>
-        <p class="small muted">Nguồn danh sách tổ hợp: ${school.demo ? "dữ liệu minh hoạ của bản demo" : "do người dùng nhập – chưa xác minh với thông báo chính thức của trường"}. Điểm tối đa 100 = Phù hợp ngành 35 + Năng lực 25 + Sở thích 20 + Linh hoạt 10 + Điều kiện/TPB 10.</p>
-        ${ranked.slice(0, 5).map((r, i) => planCard(r, i, school)).join("")}
-        ${ranked.length > 5 ? `<p class="small muted">Còn ${ranked.length - 5} tổ hợp khác có điểm thấp hơn.</p>` : ""}`;
+        <p class="small muted">Chỉ dùng các tổ hợp trong danh sách của trường (${school.combos.length} tổ hợp; nguồn: ${esc(sourceText(school))}), xếp từ phù hợp nhất. Điểm tối đa 100 = Phù hợp ngành 40 + Năng lực 30 + Sở thích 20 + Linh hoạt 10.</p>
+        ${!r.ok.length ? `<div class="callout warn"><p><b>Mọi tổ hợp của trường đều có môn ${T("bạn", "học sinh")} không muốn học.</b> Dưới đây là các tổ hợp ít vướng nhất – nên trao đổi với giáo viên trước khi quyết định.</p></div>` : ""}
+        ${list.map((x, i) => planCard(x, i, school)).join("")}
+        ${r.ok.length && r.blocked.length ? `<details class="excluded"><summary>${r.blocked.length} tổ hợp đã loại vì có môn không muốn học</summary><ul class="plain">${r.blocked.map(x => `<li class="row" style="gap:8px;margin:6px 0">${miniTiles(x.combo.subjects)}<span class="small muted">vướng: ${esc(x.a.disliked.map(subjName).join(", "))}</span></li>`).join("")}</ul></details>` : ""}`;
     }
-    const b = S.builder;
-    const ba = b.subjects.length === 4 ? analyzeCombo(b.subjects, b.cd.length ? b.cd : null, school) : null;
     return `<section class="sheet">
-      ${stepHead(4, "Gợi ý tổ hợp môn học tại trường", "Đối chiếu nguyện vọng, năng lực và sở thích với danh sách tổ hợp mà trường công khai, rồi mô phỏng kết quả từng phương án.")}
+      ${stepHead(4, "Gợi ý tổ hợp môn học tại trường", "Gợi ý chỉ lấy từ danh sách tổ hợp trường công bố – không ghép thêm môn. Tổ hợp có môn không muốn học bị loại.")}
       <div class="grid-2">
         <div class="field"><label for="s4-school">Trường</label>
-          <select id="s4-school" data-bind="ui.step4School" data-rerender="1"><option value="">– Chọn trường –</option>${allSchools().map(s => `<option value="${s.id}" ${sid === s.id ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select>
-          <span class="hint">Bản có AI sẽ tự tra cứu tổ hợp của trường trên web. Bản demo dùng trường minh hoạ hoặc bạn tự nhập.</span></div>
-        <div class="field"><span class="label">&nbsp;</span><div class="row"><button type="button" class="btn ghost" data-action="add-school">Thêm trường và tổ hợp</button>${school && !school.demo ? `<button type="button" class="btn ghost small" data-action="del-school" data-id="${school.id}">Xoá trường này</button>` : ""}</div></div>
+          <select id="s4-school" data-bind="ui.step4School" data-rerender="1"><option value="">– Chọn trường –</option>${allSchools().map(s => `<option value="${s.id}" ${sid === s.id ? "selected" : ""}>${esc(s.name)}${s.demo ? "" : s.shared ? " · CSDL chung" : " · máy này"}</option>`).join("")}</select></div>
+        <div class="field"><span class="label">&nbsp;</span><div class="row"><button type="button" class="btn ghost" data-action="add-school">Thêm / cập nhật trường</button>${school && !school.demo ? `<button type="button" class="btn ghost small" data-action="edit-school" data-id="${school.id}">Sửa danh sách</button>` : ""}</div></div>
       </div>
       <fieldset style="margin-top:16px"><legend>Ràng buộc cá nhân</legend>
-        <div class="field"><span class="label">Môn bắt buộc phải có</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="constraints.must" data-k="${k}" aria-pressed="${S.constraints.must.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
-        <div class="field" style="margin-top:10px"><span class="label">Môn tuyệt đối không học</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="constraints.exclude" data-k="${k}" aria-pressed="${S.constraints.exclude.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
+        <div class="field"><span class="label">Môn bắt buộc phải có (theo ngành mục tiêu)</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="constraints.must" data-k="${k}" aria-pressed="${S.constraints.must.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
+        <div class="field" style="margin-top:10px"><span class="label">Môn không muốn học (đồng bộ với Bước 1 – tổ hợp có môn này bị loại)</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" aria-pressed="${S.profile.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
         <p class="small muted" style="margin-top:10px">Ngành đang ưu tiên: <b>${esc(pcs.map(c => c.name).join(", ") || "chưa có")}</b> ${Object.values(S.careerFb).includes("like") ? "" : "(tạm lấy 3 ngành phù hợp nhất – đánh dấu “Thích” ở Bước 3 để chính xác hơn)"}</p>
       </fieldset>
-      ${school ? results : `<div class="callout info"><p>Chọn một trường để xem phương án đề xuất.</p></div>`}
-      <hr class="rule">
-      <h3>Tự ghép tổ hợp và kiểm tra</h3>
-      <p class="small muted">Chạm 4 môn và chọn 3 cụm chuyên đề để kiểm tra hợp lệ theo TT 13/2022${school ? " và đối chiếu với danh sách của trường" : ""}.</p>
-      <div class="grid-2">
-        <div>${boardHTML(b.subjects, "builder")}</div>
-        <div>
-          <div class="field"><span class="label">3 cụm chuyên đề (${b.cd.length}/3)</span><div class="chips">${Object.keys(D.CHUYEN_DE).map(k => `<button type="button" class="chip" data-action="cd" data-k="${k}" aria-pressed="${b.cd.includes(k)}" ${!b.cd.includes(k) && b.cd.length >= 3 ? "disabled" : ""}>${esc(D.CHUYEN_DE[k])}</button>`).join("")}</div></div>
-          ${ba ? `<div style="margin-top:12px">${ba.v.issues.length ? ba.v.issues.map(t => `<div class="callout bad"><p>${esc(t)}</p></div>`).join("") : `<div class="callout ok"><p>Hợp lệ${school ? " và có trong danh sách của trường" : ""}.</p></div>`}
-            <p class="small"><b>Điểm phù hợp:</b> ${ba.total}/100 · <b>Mở thêm tổ hợp:</b> ${ba.nonTrivial.join(", ") || "–"}</p>
-            <div class="row"><button type="button" class="btn small" data-action="shortlist-builder">Đưa vào danh sách cân nhắc</button><button type="button" class="btn ghost small" data-action="tpb-set" data-subs="${b.subjects.join(",")}">Đánh giá TPB</button></div></div>` : `<p class="small muted" style="margin-top:12px">Đã chọn ${b.subjects.length}/4 môn.</p>`}
-        </div>
-      </div>
+      ${school ? results : `<div class="callout info"><p>Chọn một trường, hoặc bấm “Thêm / cập nhật trường” để lấy danh sách tổ hợp từ website trường hoặc nhập tay.</p></div>`}
       <hr class="rule">
       <h3>Danh sách cân nhắc (${S.shortlist.length})</h3>
-      ${S.shortlist.length ? `<ul>${S.shortlist.map(k => { const [scId, ck, cdk] = k.split("|"); const sc = findSchool(scId); return `<li class="row" style="margin-bottom:6px">${miniTiles(ck.split("+"), cdk ? cdk.split(",") : [])}<span class="small muted">${esc(sc ? sc.name : "Tự ghép")}</span><button type="button" class="btn ghost small" data-action="unshortlist" data-key="${esc(k)}">Bỏ</button></li>`; }).join("")}</ul>` : `<p class="muted small">Chưa có. Bấm “Đưa vào danh sách cân nhắc” trên phương án phù hợp.</p>`}
+      ${S.shortlist.length ? `<ul class="plain">${S.shortlist.map(k => { const [scId, ck, cdk] = k.split("|"); const sc = findSchool(scId); return `<li class="row" style="margin-bottom:6px">${miniTiles(ck.split("+"), cdk ? cdk.split(",") : [])}<span class="small muted">${esc(sc ? sc.name : "")}</span><button type="button" class="btn ghost small" data-action="unshortlist" data-key="${esc(k)}">Bỏ</button></li>`; }).join("")}</ul>` : `<p class="muted small">Chưa có. Bấm “Đưa vào danh sách cân nhắc” trên phương án phù hợp.</p>`}
       ${navRow(3, 5)}
     </section>`;
   }
+  function sourceText(s) { if (s.demo) return "dữ liệu minh hoạ"; return (s.sourceUrl ? s.sourceUrl : "nhập tay") + (s.updatedAt ? ", cập nhật " + new Date(s.updatedAt).toLocaleDateString("vi-VN") : ""); }
   function planCard(r, i, school) {
     const a = r.a, c = r.combo, key = school.id + "|" + comboKey(c.subjects) + "|" + (c.cd || []).join(",");
     const inList = S.shortlist.includes(key);
     const closed = a.careerRows.filter(x => !x.strong.length).map(x => x.c.name);
-    return `<article class="plan ${i === 0 ? "top" : ""}">
+    const warnList = (a.disliked.length ? ["Có môn không muốn học: " + a.disliked.map(subjName).join(", ")] : []).concat(a.notes, a.risks);
+    return `<article class="plan ${i === 0 && !a.disliked.length ? "top" : ""}">
       <div class="plan-head"><span class="plan-rank">Phương án ${i + 1}${c.id ? " · mã " + esc(c.id) : ""}</span><span class="score-ring">${a.total}<small>/100</small></span></div>
       ${miniTiles(c.subjects, c.cd)}
-      <div class="crit"><div>Phù hợp ngành<b>${a.parts.career}/35</b></div><div>Năng lực<b>${a.parts.ability}/25</b></div><div>Sở thích<b>${a.parts.interest}/20</b></div><div>Linh hoạt<b>${a.parts.flex}/10</b></div><div>Điều kiện/TPB<b>${a.parts.cons}/10</b></div></div>
+      <div class="crit crit-4"><div>Phù hợp ngành<b>${a.parts.career}/40</b></div><div>Năng lực<b>${a.parts.ability}/30</b></div><div>Sở thích<b>${a.parts.interest}/20</b></div><div>Linh hoạt<b>${a.parts.flex}/10</b></div></div>
       <div class="plan-cols">
-        <div><h5>Kiểm tra hợp lệ</h5><ul><li><span class="${a.v.r1 ? "check" : "cross"}">${a.v.r1 ? "✓" : "✗"}</span> 4 môn khác nhau (TT 13/2022)</li><li><span class="${a.v.r2 !== false ? "check" : "cross"}">${a.v.r2 !== false ? "✓" : "✗"}</span> 3 cụm chuyên đề</li><li><span class="check">✓</span> Có trong danh sách trường</li></ul>
+        <div><h5>Kiểm tra hợp lệ</h5><ul><li><span class="${a.v.r1 ? "check" : "cross"}">${a.v.r1 ? "✓" : "✗"}</span> 4 môn khác nhau (TT 13/2022)</li><li><span class="${a.v.r2 !== false ? "check" : "cross"}">${a.v.r2 !== false ? "✓" : "✗"}</span> 3 cụm chuyên đề${a.v.r2 == null ? " (trường chưa công bố)" : ""}</li><li><span class="check">✓</span> Có trong danh sách trường</li></ul>
           <h5>Mở ra</h5><ul><li>Tổ hợp xét tuyển: ${a.nonTrivial.map(k => `<b title="${esc(D.TO_HOP[k].label)}">${k}</b>`).join(", ") || "–"} (và D01, D14)</li><li>Môn có thể chọn thi tốt nghiệp: ${esc(a.exam.join(", "))}</li>
           ${a.careerRows.filter(x => x.strong.length).map(x => `<li>${esc(x.c.name)}: qua ${x.strong.join(", ")}</li>`).join("")}</ul></div>
         <div>${closed.length ? `<h5>Hạn chế</h5><ul><li>Không mở tổ hợp đặc thù cho: ${esc(closed.join(", "))}</li></ul>` : ""}
-          ${a.risks.length || a.consNotes.length ? `<h5>Rủi ro & lưu ý</h5><ul>${a.risks.concat(a.consNotes).map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<h5>Rủi ro & lưu ý</h5><p class="small">Chưa thấy rủi ro đáng kể từ dữ liệu hiện có.</p>`}</div>
+          <h5>Rủi ro & lưu ý</h5>${warnList.length ? `<ul>${warnList.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="small">Chưa thấy rủi ro đáng kể từ dữ liệu hiện có.</p>`}</div>
       </div>
       <div class="row" style="margin-top:12px">
         <button type="button" class="btn small ${inList ? "ok" : ""}" data-action="shortlist" data-key="${esc(key)}">${inList ? "Đã trong danh sách cân nhắc" : "Đưa vào danh sách cân nhắc"}</button>
-        <button type="button" class="btn ghost small" data-action="tpb-set" data-subs="${c.subjects.join(",")}">Đánh giá TPB</button>
         <button type="button" class="btn ghost small" data-action="set-final" data-school="${school.id}" data-ck="${comboKey(c.subjects)}">Chọn làm phương án chính</button>
       </div>
     </article>`;
@@ -559,33 +635,30 @@
 
   /* ================= BƯỚC 5 ================= */
   function questionsForMeeting() {
-    const q = [], p = S.profile, tp = tpbStats(), hs = hollandStats();
-    if (p.wish && p.familyWish && p.wish.trim().toLowerCase() !== p.familyWish.trim().toLowerCase()) q.push(`Nguyện vọng của học sinh (“${p.wish}”) và mong muốn của gia đình (“${p.familyWish}”) khác nhau – điểm chung nào giữa hai hướng này?`);
-    if (tp.m.ATT >= 4 && tp.m.SN < 3) q.push("Gia đình/thầy cô còn băn khoăn điều gì về tổ hợp học sinh đang thích?");
-    if (tp.m.PBC != null && tp.m.PBC < 3) q.push("Học sinh cần hỗ trợ gì (thời gian, phương pháp, học liệu) để tự tin học tốt tổ hợp?");
+    const q = [], p = S.profile, hs = hollandStats();
+    if (p.wish && p.familyWish && norm(p.wish) !== norm(p.familyWish)) q.push(`Nguyện vọng của học sinh (“${p.wish}”) và mong muốn của gia đình (“${p.familyWish}”) khác nhau – điểm chung nào giữa hai hướng này?`);
     if (hs.flat) q.push("Sở thích nghề nghiệp chưa rõ – có thể cho học sinh trải nghiệm hoạt động nào để khám phá thêm?");
     const weak = strengthLists().weak; if (weak.length) q.push("Với các môn còn yếu (" + weak.join(", ") + "), có nên tránh hay có kế hoạch củng cố?");
+    if (p.disliked.length) q.push("Học sinh không muốn học " + p.disliked.map(subjName).join(", ") + " – lý do là gì, có ảnh hưởng đến ngành mục tiêu không?");
     q.push("Nếu không đỗ ngành ưu tiên, phương án dự phòng là gì?");
     q.push("Gia đình có đồng ý với phương án chính và hiểu rằng môn lựa chọn cần giữ ổn định đến hết lớp 12?");
     return q;
   }
   function viewStep5() {
-    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), tp = tpbStats(), st = strengthLists();
-    const sch = findSchool(p.schoolId);
+    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like");
     const fc = finalCombo();
     return `<section class="sheet">
-      ${stepHead(5, "Tư vấn giáo viên – cha mẹ – học sinh", "Bước 5 là buổi gặp trực tiếp với thầy cô và cha mẹ – web chỉ chuẩn bị phiếu tóm tắt và câu hỏi gợi ý.")}
+      ${stepHead(5, "Tư vấn giáo viên – cha mẹ – học sinh", "Đây là buổi trao đổi trực tiếp. Web chuẩn bị phiếu tóm tắt và câu hỏi gợi ý để buổi gặp hiệu quả hơn.")}
       <div class="callout info no-print"><p>${{ hs: "Bạn chỉ chia sẻ phiếu này với thầy cô và cha mẹ khi bạn đồng ý.", ph: "Anh/chị hãy cùng con xem phiếu trước buổi gặp và để con nói lên mong muốn của mình.", gv: "Thầy/cô có thể dùng phiếu như dữ liệu đầu vào; các con số chỉ mang tính tham khảo." }[S.role || "hs"]}</p></div>
       <div class="summary-doc" id="printArea">
         <h3>PHIẾU TÓM TẮT TƯ VẤN CHỌN MÔN LỚP 10 (H5)</h3>
-        <p class="small">Học sinh: <b>${esc(p.nickname || "……")}</b> · Trường: <b>${esc(sch ? sch.name : (p.schoolOther || "……"))}</b> · Ngày lập: ${new Date().toLocaleDateString("vi-VN")}</p>
+        <p class="small">Học sinh: <b>${esc(p.nickname || "……")}</b> · Mã HS: <b>${esc(p.code || "……")}</b> · Lớp: ${esc(p.className || "……")} · Trường: <b>${esc(schoolName() || "……")}</b> · Ngày lập: ${new Date().toLocaleDateString("vi-VN")}</p>
         <h4>1. Học tập</h4><ul><li>Môn mạnh: ${esc(st.strong.join(", ") || "–")}</li><li>Cần cố gắng: ${esc(st.weak.join(", ") || "–")}</li><li>Năng khiếu/giải thưởng: ${esc(p.talents || "–")}</li></ul>
-        <h4>2. Tâm lý – sở thích (tham khảo)</h4><ul><li>Holland: ${hs.answered ? "<b>" + hollandLabel(hs) + "</b>" : "–"}</li><li>Tính cách 4 chiều: ${ps.answered ? esc(ps.type) : "–"}</li><li>Trí tuệ nổi trội: ${gs.answered ? esc(gs.top.map(k => D.GARDNER.find(g => g.key === k).name).join(", ")) : "–"}</li>
-          <li>TPB${tp.combo ? " (" + esc(comboLabel(tp.combo.subjects)) + ")" : ""}: ${tp.answered ? `Thái độ ${fmt(tp.m.ATT)} · Chuẩn chủ quan ${fmt(tp.m.SN)} · Kiểm soát ${fmt(tp.m.PBC)} · Ý định ${fmt(tp.m.INT)}` : "–"}</li></ul>
-        <h4>3. Nguyện vọng & ngành ưu tiên</h4><ul><li>Học sinh: ${esc(p.wish || "–")} · Gia đình: ${esc(p.familyWish || "–")}</li><li>Ngành ưu tiên: ${esc(liked.map(c => c.name).join(", ") || "chưa chọn")}</li></ul>
+        <h4>2. Tâm lý – sở thích (tham khảo)</h4><ul><li>Holland: ${hs.answered ? "<b>" + hs.code + "</b>" + (hs.done ? "" : " (chưa đủ câu)") : "–"}</li><li>Tính cách 4 chiều: ${ps.answered ? esc(ps.type) : "–"}</li><li>Trí tuệ nổi trội: ${gs.answered ? esc(gs.top.map(gName).join(", ")) : "–"}</li><li>Môn thích: ${esc(p.liked.map(subjName).join(", ") || "–")} · Không muốn học: ${esc(p.disliked.map(subjName).join(", ") || "–")}</li></ul>
+        <h4>3. Nguyện vọng & ngành ưu tiên</h4><ul><li>Học sinh: ${esc(p.wish || "–")} · Gia đình: ${esc(p.familyWish || "–")}</li><li>Ngành ưu tiên: ${esc(liked.map(c => c.name + " (" + careerAnalysis(c).total + "%)").join(", ") || "chưa chọn")}</li></ul>
         <h4>4. Phương án đang cân nhắc</h4>
-        ${S.shortlist.length ? `<ul>${S.shortlist.map(k => { const [scId, ck] = k.split("|"); const sc = findSchool(scId); const a = analyzeCombo(ck.split("+"), null, null); return `<li>${esc(comboLabel(ck.split("+")))} – ${a.total}/100 – mở ${esc(a.nonTrivial.join(", ") || "–")}${sc ? "" : " (tự ghép)"}</li>`; }).join("")}</ul>` : "<p class='small'>Chưa có.</p>"}
+        ${S.shortlist.length ? `<ul>${S.shortlist.map(k => { const [scId, ck] = k.split("|"); const a = analyzeCombo(ck.split("+"), null, findSchool(scId)); return `<li>${esc(comboLabel(ck.split("+")))} – ${a.total}/100 – mở ${esc(a.nonTrivial.join(", ") || "–")}</li>`; }).join("")}</ul>` : "<p class='small'>Chưa có.</p>"}
         ${fc ? `<p class="small"><b>Phương án chính dự kiến:</b> ${esc(comboLabel(fc.subjects))}</p>` : ""}
         <h4>5. Câu hỏi gợi ý cho buổi gặp</h4><ol class="small">${questionsForMeeting().map(x => `<li>${esc(x)}</li>`).join("")}</ol>
         <h4>6. Ghi chú sau buổi gặp</h4><p style="min-height:60px;border-bottom:1px dotted #999"></p>
@@ -597,7 +670,6 @@
         <button type="button" class="btn ghost" data-action="copy-summary">Sao chép tóm tắt</button>
         <label class="row small" style="gap:6px"><input type="checkbox" data-action="check" data-k="talked" ${S.final.checks.talked ? "checked" : ""}> Đã trao đổi với giáo viên và cha mẹ</label>
       </div>
-      ${submitBox()}
       ${navRow(4, 6)}
     </section>`;
   }
@@ -605,14 +677,13 @@
   /* ================= BƯỚC 6 ================= */
   function viewStep6() {
     const fc = finalCombo(); const sch = findSchool(S.final.schoolId);
-    let auto = null, a = null;
-    if (fc) { a = analyzeCombo(fc.subjects, fc.cd && fc.cd.length ? fc.cd : null, sch); auto = a.v; }
-    const options = [];
-    S.shortlist.forEach(k => { const [scId, ck] = k.split("|"); options.push({ scId, ck }); });
+    const a = fc ? analyzeCombo(fc.subjects, fc.cd && fc.cd.length ? fc.cd : null, sch) : null;
+    const auto = a ? a.v : null;
+    const options = S.shortlist.map(k => { const [scId, ck] = k.split("|"); return { scId, ck }; });
     const items = [
       { k: "r1", t: "Đúng 4 môn lựa chọn, khác nhau, trong 9 môn (TT 13/2022)", auto: auto ? auto.r1 : null },
-      { k: "r2", t: "3 cụm chuyên đề của 3 môn khác nhau, đúng theo tổ hợp của trường", auto: auto ? (auto.r2 === null ? null : auto.r2) : null },
-      { k: "r3", t: "Tổ hợp có trong danh sách trường công khai; đúng định hướng Công nghệ (công nghiệp/nông nghiệp) nếu có", auto: auto ? (auto.r3 === null ? null : auto.r3) : null },
+      { k: "r2", t: "3 cụm chuyên đề của 3 môn khác nhau, đúng theo tổ hợp của trường", auto: auto ? auto.r2 : null },
+      { k: "r3", t: "Tổ hợp có trong danh sách trường công khai; đúng định hướng Công nghệ (công nghiệp/nông nghiệp) nếu có", auto: auto ? auto.r3 : null },
       { k: "career", t: "Phù hợp ít nhất 1 ngành mục tiêu và có phương án dự phòng", auto: a ? a.careerRows.some(r => r.strong.length) : null },
       { k: "parent", t: "Cha mẹ/người giám hộ đã biết và đồng ý" },
       { k: "deadline", t: "Biết thời hạn và cách nộp phiếu đăng ký của trường" },
@@ -622,22 +693,20 @@
     return `<section class="sheet">
       ${stepHead(6, "Chốt nguyện vọng và đăng ký chính thức", "Chọn phương án cuối cùng, kiểm tra hợp lệ trước khi điền phiếu đăng ký của trường.")}
       <div class="field"><span class="label">Phương án chính</span>
-        ${fc ? `<div class="row">${miniTiles(fc.subjects, fc.cd)}<span class="small muted">${esc(sch ? sch.name : "Tự ghép")}</span><button type="button" class="btn ghost small" data-action="clear-final">Đổi phương án</button></div>`
-          : options.length ? `<div class="chips">${options.map(o => `<button type="button" class="chip" data-action="set-final" data-school="${o.scId}" data-ck="${o.ck}">${esc(comboLabel(o.ck.split("+")))}${findSchool(o.scId) ? "" : " (tự ghép)"}</button>`).join("")}</div>`
+        ${fc ? `<div class="row">${miniTiles(fc.subjects, fc.cd)}<span class="small muted">${esc(sch ? sch.name : "")}</span><button type="button" class="btn ghost small" data-action="clear-final">Đổi phương án</button></div>`
+          : options.length ? `<div class="chips">${options.map(o => `<button type="button" class="chip" data-action="set-final" data-school="${o.scId}" data-ck="${o.ck}">${esc(comboLabel(o.ck.split("+")))}</button>`).join("")}</div>`
           : `<p class="muted">Chưa có phương án trong danh sách cân nhắc. <button type="button" class="btn ghost small" data-go="4">Về Bước 4</button></p>`}
       </div>
       <h3 style="margin-top:18px">Danh sách kiểm tra</h3>
       <ul class="checklist">${items.map(it => `<li>${it.auto == null ? `<input type="checkbox" id="ck-${it.k}" data-action="check" data-k="${it.k}" ${S.final.checks[it.k] ? "checked" : ""}>` : `<span aria-hidden="true" class="${it.auto ? "check" : "cross"}" style="width:20px;text-align:center">${it.auto ? "✓" : "✗"}</span>`}
         <label for="ck-${it.k}">${esc(it.t)}${it.auto == null ? "" : `<span class="auto-flag ${it.auto ? "y" : "n"}">${it.auto ? "tự kiểm tra: đạt" : "tự kiểm tra: chưa đạt"}</span>`}</label></li>`).join("")}</ul>
       ${a && a.v.issues.length ? a.v.issues.map(t => `<div class="callout bad"><p>${esc(t)}</p></div>`).join("") : ""}
+      ${a && a.disliked.length ? `<div class="callout warn"><p>Phương án có môn ${T("bạn", "học sinh")} không muốn học: ${esc(a.disliked.map(subjName).join(", "))}.</p></div>` : ""}
       <div class="row" style="margin-top:16px">
         <button type="button" class="btn ok" data-action="confirm-final" ${allOk ? "" : "disabled"}>${S.final.confirmed ? "Đã xác nhận phương án" : "Xác nhận phương án chính thức"}</button>
         ${allOk ? "" : '<span class="small muted">Hoàn thành tất cả mục để xác nhận.</span>'}
       </div>
-      ${S.final.confirmed && fc ? `<div class="callout ok" style="margin-top:16px"><h4>Xác nhận phương án (H6)</h4><p>${esc(S.profile.nickname || "Học sinh")} chọn tổ hợp <b>${esc(comboLabel(fc.subjects))}</b>${fc.cd && fc.cd.length ? " với cụm chuyên đề " + esc(fc.cd.map(k => D.CHUYEN_DE[k]).join(", ")) : ""}. Hãy điền đúng phương án này vào phiếu đăng ký của trường.</p></div>
-        <h3>Mã hồ sơ</h3><p class="small muted">Lưu lại để tiếp tục ở lần sau, hoặc gửi cho thầy cô.</p><div class="code-box">${esc(summaryText())}</div>
-        <div class="row" style="margin-top:10px"><button type="button" class="btn ghost small" data-action="open-profile-code">Lưu / tải mã hồ sơ</button></div>` : ""}
-      ${updateBar()}
+      ${S.final.confirmed && fc ? `<div class="callout ok" style="margin-top:16px"><h4>Xác nhận phương án (H6)</h4><p>${esc(S.profile.nickname || "Học sinh")} chọn tổ hợp <b>${esc(comboLabel(fc.subjects))}</b>${fc.cd && fc.cd.length ? " với cụm chuyên đề " + esc(fc.cd.map(k => D.CHUYEN_DE[k]).join(", ")) : ""}. Hãy điền đúng phương án này vào phiếu đăng ký của trường.</p></div>` : ""}
       ${navRow(5, 7)}
     </section>`;
   }
@@ -645,64 +714,328 @@
   /* ================= BƯỚC 7 ================= */
   function warningsFor(entry, prev) {
     const w = [];
-    Object.keys(entry.scores).forEach(s => {
+    Object.keys(entry.scores || {}).forEach(s => {
       const v = entry.scores[s];
       if (v != null && v < 5) w.push({ k: "bad", t: `${subjName(s)}: điểm ${fmt(v)} dưới 5,0.`, fix: "Gặp giáo viên bộ môn để xác định lỗ hổng kiến thức; lập kế hoạch tự học 2–3 buổi/tuần; tham gia nhóm học tập." });
-      if (prev && prev.scores[s] != null && v != null && prev.scores[s] - v >= 1.5) w.push({ k: "warn", t: `${subjName(s)}: giảm ${fmt(prev.scores[s] - v)} điểm so với ${prev.period}.`, fix: "Xem lại phương pháp học, thời gian tự học và các yếu tố ảnh hưởng gần đây." });
-      if (entry.sat[s] != null && entry.sat[s] <= 2) w.push({ k: "warn", t: `${subjName(s)}: mức hài lòng thấp (${entry.sat[s]}/5).`, fix: "Trao đổi với GVCN về khó khăn; tìm cách học khiến môn học thú vị hơn (dự án, thực hành)." });
+      if (prev && prev.scores && prev.scores[s] != null && v != null && prev.scores[s] - v >= 1.5) w.push({ k: "warn", t: `${subjName(s)}: giảm ${fmt(prev.scores[s] - v)} điểm so với ${prev.period}.`, fix: "Xem lại phương pháp học, thời gian tự học và các yếu tố ảnh hưởng gần đây." });
     });
+    Object.keys(entry.sat || {}).forEach(s => { if (entry.sat[s] != null && entry.sat[s] <= 2) w.push({ k: "warn", t: `${subjName(s)}: mức hài lòng thấp (${entry.sat[s]}/5).`, fix: "Trao đổi với GVCN về khó khăn; tìm cách học khiến môn học thú vị hơn (dự án, thực hành)." }); });
     if (entry.overall != null && entry.overall <= 2) w.push({ k: "warn", t: `Mức hài lòng chung với tổ hợp thấp (${entry.overall}/5).`, fix: "Nên gặp giáo viên tư vấn sớm để đánh giá lại." });
-    if (entry.stress != null && entry.stress >= 4) w.push({ k: "bad", t: "Mức căng thẳng cao.", fix: "Hãy chia sẻ với cha mẹ, GVCN hoặc tổ tư vấn tâm lý của trường. Nếu có lúc nghĩ đến việc làm hại bản thân, gọi ngay Tổng đài quốc gia bảo vệ trẻ em 111 (miễn phí, 24/7)." });
+    if (entry.stress != null && entry.stress >= 4) w.push({ k: "bad", t: `Mức căng thẳng ${entry.stress >= 5 ? "rất cao" : "cao"} (${entry.stress}/5).`, fix: "Hãy chia sẻ với cha mẹ, GVCN hoặc tổ tư vấn tâm lý của trường. Nếu có lúc nghĩ đến việc làm hại bản thân, gọi ngay Tổng đài quốc gia bảo vệ trẻ em 111 (miễn phí, 24/7)." });
     return w;
   }
+  const scaleRadios = (name, list) => `<div class="rubric" role="radiogroup">${list.map((t, i) => { const [head, ...rest] = t.split(" – "); return `<label class="rub"><input type="radio" name="${name}" value="${i + 1}"><span><b>${i + 1} · ${esc(head)}</b><small>${esc(rest.join(" – "))}</small></span></label>`; }).join("")}</div>`;
   function viewStep7() {
     const fc = finalCombo();
     const subs = fc ? fc.subjects : [];
-    const last = S.tracking[S.tracking.length - 1];
-    const prev = S.tracking[S.tracking.length - 2];
+    const last = S.tracking[S.tracking.length - 1], prev = S.tracking[S.tracking.length - 2];
     const warns = last ? warningsFor(last, prev) : [];
+    const miss = missingFields();
+    const histSubs = subs.length ? subs : [...new Set(S.tracking.flatMap(e => Object.keys(e.sat || {}).concat(Object.keys(e.scores || {}))))];
     return `<section class="sheet">
-      ${stepHead(7, "Theo dõi – đánh giá – điều chỉnh", "Quay lại vào cuối học kỳ 1 và cuối năm để cập nhật kết quả. Web sẽ cảnh báo sớm và gợi ý biện pháp hỗ trợ.")}
-      ${!fc ? `<div class="callout info"><p>Chưa có phương án chính thức. <button type="button" class="btn ghost small" data-go="6">Về Bước 6</button></p></div>` : `
+      ${stepHead(7, "Theo dõi – đánh giá – điều chỉnh", "Cập nhật kết quả vào cuối học kỳ 1 và cuối năm, hoặc nhập kết quả khảo sát Google Form ở Khu vực giáo viên. Lưu hồ sơ để lần tư vấn sau không phải nhập lại.")}
+      <div class="save-bar no-print">
+        <div><b>Hồ sơ ${esc(S.profile.code ? "mã " + S.profile.code : "– chưa có mã học sinh")}</b><span class="small muted">${miss.length ? `Còn ${miss.length} mục chưa đầy đủ – vẫn lưu được.` : "Đã đủ thông tin."}</span></div>
+        <div class="row"><button type="button" class="btn" data-action="save-profile">Lưu hồ sơ</button><button type="button" class="btn ghost" data-go="8">Danh mục hồ sơ</button></div>
+      </div>
+      ${!fc ? `<div class="callout info"><p>Chưa có phương án chính thức nên chưa nhập theo dõi theo môn được. <button type="button" class="btn ghost small" data-go="6">Về Bước 6</button></p></div>` : `
       <form id="trackForm" class="no-print">
-        <div class="grid-3">
-          <div class="field"><label for="t-period">Thời điểm</label><select id="t-period" name="period">${["Giữa HK1", "Cuối HK1", "Giữa HK2", "Cuối năm lớp 10", "Cuối HK1 lớp 11", "Cuối năm lớp 11"].map(x => `<option>${x}</option>`).join("")}</select></div>
-          <div class="field"><label for="t-overall">Hài lòng chung với tổ hợp (1–5)</label><input id="t-overall" name="overall" type="number" min="1" max="5" step="1"></div>
-          <div class="field"><label for="t-stress">Mức căng thẳng học tập (1–5)</label><input id="t-stress" name="stress" type="number" min="1" max="5" step="1"></div>
+        <div class="field" style="max-width:280px"><label for="t-period">Thời điểm</label><select id="t-period" name="period">${D.PERIODS.map(x => `<option>${x}</option>`).join("")}</select></div>
+        <div class="grid-2" style="margin-top:14px">
+          <fieldset><legend>Mức hài lòng chung với tổ hợp</legend>${scaleRadios("overall", D.SATISFACTION)}</fieldset>
+          <fieldset><legend>Mức căng thẳng trong học tập</legend>${scaleRadios("stress", D.STRESS)}</fieldset>
         </div>
-        <div class="table-wrap" style="margin-top:12px"><table class="t"><thead><tr><th>Môn</th><th>Điểm TB (0–10)</th><th>Hài lòng (1–5)</th></tr></thead><tbody>
-          ${subs.map(s => `<tr><td>${esc(subjName(s))}</td><td><input name="score-${s}" type="number" min="0" max="10" step="0.1" style="max-width:110px"></td><td><input name="sat-${s}" type="number" min="1" max="5" step="1" style="max-width:90px"></td></tr>`).join("")}
+        <div class="table-wrap"><table class="t"><thead><tr><th>Môn</th><th>Điểm TB (0–10)</th><th>Mức hài lòng với môn</th></tr></thead><tbody>
+          ${subs.map(s => `<tr><td>${esc(subjName(s))}</td><td><input name="score-${s}" type="number" min="0" max="10" step="0.1" style="max-width:110px"></td><td><select name="sat-${s}"><option value="">– Chọn –</option>${D.SUBJECT_SAT.map((t, i) => `<option value="${i + 1}">${i + 1} · ${esc(t.split(" – ")[0])}</option>`).join("")}</select></td></tr>`).join("")}
         </tbody></table></div>
+        <details class="small" style="margin-top:8px"><summary>Cách chấm mức hài lòng với từng môn</summary><ul>${D.SUBJECT_SAT.map((t, i) => `<li><b>${i + 1}</b> – ${esc(t)}</li>`).join("")}</ul></details>
         <label class="row small" style="gap:6px;margin-top:10px"><input type="checkbox" name="wantChange"> ${T("Mình đang muốn đổi môn lựa chọn", "Học sinh đang muốn đổi môn lựa chọn")}</label>
-        <div class="row" style="margin-top:12px"><button type="submit" class="btn">Lưu lần theo dõi</button></div>
+        <div class="row" style="margin-top:12px"><button type="submit" class="btn">Ghi lần theo dõi</button></div>
       </form>`}
-      ${last ? `<hr class="rule"><h3>Báo cáo theo dõi (H7) – ${esc(last.period)}</h3>
+      ${last ? `<hr class="rule"><h3>Báo cáo theo dõi (H7) – ${esc(last.period)}${last.source === "form" ? " (từ Google Form)" : ""}</h3>
         ${warns.length ? warns.map(x => `<div class="callout ${x.k}"><p><b>${esc(x.t)}</b><br>${esc(x.fix)}</p></div>`).join("") : `<div class="callout ok"><p>Chưa có cảnh báo. Tiếp tục duy trì!</p></div>`}
         ${last.wantChange ? `<div class="callout info"><h4>Nếu muốn đổi môn (CV 68/BGDĐT-GDTrH)</h4><ul class="small"><li>Chỉ thực hiện vào <b>cuối năm học</b>; Hiệu trưởng xem xét, quyết định theo khả năng của trường.</li><li>Phải có <b>bản cam kết tự bổ sung</b> kiến thức của môn mới ở lớp trước, có xác nhận của cha mẹ/người giám hộ.</li><li>Nhà trường tổ chức <b>kiểm tra</b> việc tự bổ sung.</li><li>Nên gặp GVCN sớm, cân nhắc kỹ lợi – hại trước khi quyết định.</li></ul></div>` : ""}
-        <h4>Lịch sử</h4><div class="table-wrap"><table class="t"><thead><tr><th>Thời điểm</th>${subs.map(s => `<th>${esc(subjShort(s))}</th>`).join("")}<th>Hài lòng chung</th><th>Căng thẳng</th><th></th></tr></thead><tbody>
-          ${S.tracking.map((e, i) => `<tr><td>${esc(e.period)}</td>${subs.map(s => `<td>${fmt(e.scores[s])}</td>`).join("")}<td>${e.overall ?? "–"}</td><td>${e.stress ?? "–"}</td><td><button type="button" class="btn ghost small" data-action="del-track" data-i="${i}">Xoá</button></td></tr>`).join("")}
-        </tbody></table></div>
-        <p class="small muted">Lịch kiểm tra lại gợi ý: cuối HK1 và cuối năm học.</p>` : ""}
-      ${updateBar()}
+        <h4>Lịch sử</h4><div class="table-wrap"><table class="t"><thead><tr><th>Thời điểm</th>${histSubs.map(s => `<th>${esc(subjShort(s))}<br><span class="muted small">điểm / hài lòng</span></th>`).join("")}<th>Hài lòng chung</th><th>Căng thẳng</th><th>Nguồn</th><th></th></tr></thead><tbody>
+          ${S.tracking.map((e, i) => `<tr><td>${esc(e.period)}</td>${histSubs.map(s => `<td>${fmt((e.scores || {})[s])} / ${(e.sat || {})[s] ?? "–"}</td>`).join("")}<td>${e.overall ?? "–"}</td><td>${e.stress ?? "–"}</td><td class="small">${e.source === "form" ? "Google Form" : "Nhập tay"}</td><td><button type="button" class="btn ghost small" data-action="del-track" data-i="${i}">Xoá</button></td></tr>`).join("")}
+        </tbody></table></div>` : ""}
       ${navRow(6, null)}
     </section>`;
   }
 
+  /* ================= KHU VỰC GIÁO VIÊN ================= */
+  function viewTeacher() {
+    const needLogin = SRV.on && !SRV.token;
+    const where = SRV.on ? "máy chủ (dùng chung cho mọi máy)" : "trình duyệt của máy này – mở web qua máy chủ để dùng chung";
+    return `<section class="sheet">
+      <div class="step-head"><span class="big-num" aria-hidden="true">GV</span><div><h2>Khu vực giáo viên</h2><p>Danh mục hồ sơ đã lưu, nhập kết quả khảo sát Google Form, cơ sở dữ liệu trường. Dữ liệu đang lưu trên ${where}.</p></div></div>
+      ${needLogin ? `<form id="loginForm" class="callout info" style="max-width:460px"><h4>Đăng nhập giáo viên</h4><div class="field"><label for="tpass">Mật khẩu</label><input id="tpass" type="password" autocomplete="current-password"></div><div class="row" style="margin-top:10px"><button class="btn" type="submit">Đăng nhập</button></div><p class="small muted" style="margin-top:8px">Mật khẩu do người quản trị đặt trên máy chủ (TEACHER_PASSWORD).</p></form>` : `
+      <div class="row" style="margin-bottom:10px"><h3 style="margin:0">Danh mục hồ sơ</h3><span class="spacer"></span><label class="sr-only" for="arcSearch">Tìm hồ sơ</label><input type="text" id="arcSearch" placeholder="Tìm theo mã, tên, lớp, trường…" value="${esc(S.ui.arcSearch || "")}" style="max-width:280px">${SRV.on ? `<button type="button" class="btn ghost small" data-action="logout">Đăng xuất</button>` : ""}</div>
+      <div id="arcList"><p class="muted small">Đang tải…</p></div>
+      <hr class="rule">
+      <h3>Nhập kết quả khảo sát Google Form</h3>
+      <p class="small">Tải kết quả từ Google Form (Google Sheets → Tệp → Tải xuống → .csv hoặc .xlsx) rồi chọn file. Web khớp theo <b>Mã học sinh</b>, thêm vào lịch sử theo dõi và chạy cảnh báo sớm. Mẫu câu hỏi: <a href="docs/MAU-GOOGLE-FORM.md" target="_blank" rel="noopener">docs/MAU-GOOGLE-FORM.md</a> · file thử: <a href="docs/mau-ket-qua-google-form.csv" download>mau-ket-qua-google-form.csv</a>.</p>
+      <div class="row"><label class="sr-only" for="formFile">File kết quả</label><input type="file" id="formFile" accept=".csv,.xlsx,.xls"><button type="button" class="btn" data-action="import-form">Nhập kết quả</button></div>
+      <div id="importReport"></div>
+      <hr class="rule">
+      <h3>Cơ sở dữ liệu trường</h3>
+      ${schoolTable()}`}
+    </section>`;
+  }
+  function schoolTable() {
+    return `<div class="table-wrap"><table class="t"><thead><tr><th>Trường</th><th>Tỉnh/thành</th><th>Số tổ hợp</th><th>Nguồn</th><th>Lưu ở</th><th></th></tr></thead><tbody>
+      ${allSchools().map(s => `<tr><td>${esc(s.name)}</td><td>${esc(s.province || "–")}</td><td>${s.combos.length}</td><td class="small">${esc(sourceText(s))}</td><td class="small">${s.demo ? "Minh hoạ" : s.shared ? "CSDL chung" : "Máy này"}</td><td class="nowrap">${s.demo ? "" : `<button type="button" class="btn ghost small" data-action="edit-school" data-id="${s.id}">Sửa</button> <button type="button" class="btn ghost small" data-action="del-school" data-id="${s.id}">Xoá</button>`}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn ghost" data-action="add-school">Thêm / cập nhật trường</button></div>`;
+  }
+  async function fillArchive() {
+    const box = $("#arcList"); if (!box) return;
+    try {
+      const list = await Archive.list();
+      const q = norm(S.ui.arcSearch || "");
+      const rows = list.filter(r => !q || norm([r.code, r.name, r.className, r.school].join(" ")).includes(q)).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+      box.innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Mã HS</th><th>Tên gọi</th><th>Lớp</th><th>Trường</th><th>Tổ hợp chốt</th><th>Lần theo dõi</th><th>Còn thiếu</th><th>Cập nhật</th><th></th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td><b>${esc(r.code)}</b></td><td>${esc(r.name || "–")}</td><td>${esc(r.className || "–")}</td><td>${esc(r.school || "–")}</td><td>${esc(r.combo || "–")}</td><td>${r.trackCount || 0}</td><td>${r.missing ? `<span class="auto-flag n" title="${esc((r.missingList || []).join("; "))}">${r.missing} mục</span>` : `<span class="auto-flag y">đủ</span>`}</td><td class="small">${r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "–"}</td>
+          <td class="nowrap"><button type="button" class="btn small" data-action="open-archive" data-code="${esc(r.code)}">Mở</button> <button type="button" class="btn ghost small" data-action="del-archive" data-code="${esc(r.code)}">Xoá</button></td></tr>`).join("")}</tbody></table></div>
+        <p class="small muted">Rê chuột vào ô “Còn thiếu” để xem các mục chưa đầy đủ.</p>`
+        : `<p class="muted">Chưa có hồ sơ nào${q ? " khớp tìm kiếm" : ""}. Hồ sơ được lưu bằng nút “Lưu hồ sơ” ở Bước 7.</p>`;
+    } catch (e) { box.innerHTML = `<div class="callout bad"><p>Không tải được danh mục: ${esc(e.message)}</p></div>`; }
+  }
+
+  /* ================= KHO HỒ SƠ ================= */
+  const Archive = {
+    localAll() { try { return JSON.parse(safeGet(KEY_ARCHIVE) || "{}"); } catch (e) { return {}; } },
+    async list() { if (SRV.on) return (await api("/api/profiles")).profiles || []; return Object.values(this.localAll()).map(r => Object.assign({}, r, { data: undefined })); },
+    async get(code) { if (SRV.on) { try { return (await api("/api/profiles/" + encodeURIComponent(code))).profile; } catch (e) { if (/404|not found|không/i.test(e.message)) return null; throw e; } } return this.localAll()[code] || null; },
+    async put(rec) { if (SRV.on) { await api("/api/profiles/" + encodeURIComponent(rec.code), { method: "PUT", body: JSON.stringify(rec) }); return; } const all = this.localAll(); all[rec.code] = rec; safeSet(KEY_ARCHIVE, JSON.stringify(all)); },
+    async del(code) { if (SRV.on) { await api("/api/profiles/" + encodeURIComponent(code), { method: "DELETE" }); return; } const all = this.localAll(); delete all[code]; safeSet(KEY_ARCHIVE, JSON.stringify(all)); }
+  };
+  function withState(st, fn) { const keep = S; S = st; try { return fn(); } finally { S = keep; } }
+  function recordFromState(st) {
+    return withState(st, () => {
+      const fc = finalCombo(), miss = missingFields();
+      return { code: String(st.profile.code).trim(), name: st.profile.nickname, className: st.profile.className, school: schoolName(), combo: fc ? comboLabel(fc.subjects) : "", trackCount: st.tracking.length,
+        missing: miss.length, missingList: miss.map(m => "B" + m.step + ": " + m.t), updatedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(st)) };
+    });
+  }
+  function saveProfileFlow() {
+    if (SRV.on && !SRV.token) { toast("Cần đăng nhập Khu vực giáo viên để lưu vào danh mục"); go(8); return; }
+    const miss = missingFields();
+    const byStep = {}; miss.forEach(m => (byStep[m.step] = byStep[m.step] || []).push(m.t));
+    dialog(`<h3>Lưu hồ sơ</h3>
+      <div class="field"><label for="sv-code">Mã học sinh</label><input id="sv-code" type="text" value="${esc(S.profile.code)}" autocomplete="off"></div>
+      ${miss.length ? `<div class="callout warn" style="margin-top:12px"><h4>Còn ${miss.length} mục chưa đầy đủ</h4><ul class="small">${Object.keys(byStep).map(k => `<li><b>Bước ${k}:</b> ${esc(byStep[k].join("; "))}</li>`).join("")}</ul><p class="small">Vẫn có thể lưu và bổ sung sau.</p></div>` : `<div class="callout ok" style="margin-top:12px"><p>Thông tin đã đầy đủ.</p></div>`}
+      <p class="small muted">Lưu vào ${SRV.on ? "danh mục trên máy chủ" : "trình duyệt của máy này"}. Hồ sơ cùng mã sẽ được cập nhật.</p>
+      <p class="small" id="sv-err" style="color:var(--bad)"></p>
+      <div class="row"><button type="button" class="btn" id="sv-ok">${miss.length ? "Vẫn lưu" : "Lưu"}</button><button type="button" class="btn ghost" id="sv-no">${miss.length ? "Quay lại bổ sung" : "Huỷ"}</button></div>`, root => {
+      $("#sv-no", root).onclick = closeDialog;
+      $("#sv-ok", root).onclick = async () => {
+        const code = $("#sv-code", root).value.trim();
+        if (!code) { $("#sv-err", root).textContent = "Hãy nhập mã học sinh."; return; }
+        S.profile.code = code; save();
+        try { await Archive.put(recordFromState(S)); closeDialog(); render(); toast("Đã lưu hồ sơ " + code); }
+        catch (e) { $("#sv-err", root).textContent = "Không lưu được: " + e.message; }
+      };
+    });
+  }
+  async function openArchive(code) {
+    try {
+      const rec = await Archive.get(code); if (!rec || !rec.data) { toast("Không tìm thấy hồ sơ mã " + code); return; }
+      const role = S.role; S = merge(blankState(), upgrade(rec.data)); if (role) S.role = role; save(); go(1); toast("Đã mở hồ sơ " + code);
+    } catch (e) { toast("Không mở được: " + e.message); }
+  }
+
+  /* ================= NHẬP GOOGLE FORM ================= */
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, "");
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+      else cell += ch;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(c => String(c).trim() !== ""));
+  }
+  function loadSheetJS() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = () => ok(window.XLSX); s.onerror = () => bad(new Error("Không tải được thư viện đọc Excel – hãy dùng file .csv")); document.head.appendChild(s); });
+  }
+  async function readSheet(file) {
+    if (/\.csv$/i.test(file.name)) return parseCSV(await file.text());
+    const X = await loadSheetJS(); const wb = X.read(await file.arrayBuffer(), { type: "array" });
+    return X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+  }
+  const SUBJ_PATTERNS = { dia: /dia ?l[iy]/, gdkt: /kinh te|ktpl|gdkt/, li: /vat ?l[iy]/, hoa: /hoa hoc|\bhoa\b/, sinh: /sinh hoc|\bsinh\b/, cn: /cong nghe/, tin: /tin hoc|\btin\b/, an: /am nhac|\bnhac\b/, mt: /m[iy] thuat/ };
+  function mapFormHeaders(h) {
+    const m = { sat: {}, score: {} };
+    h.forEach((raw, i) => {
+      const t = norm(raw);
+      const br = t.match(/\[(.+)\]/);
+      if (br) {
+        const key = Object.keys(SUBJ_PATTERNS).find(k => SUBJ_PATTERNS[k].test(br[1]));
+        if (key) { if (/diem/.test(t)) m.score[key] = i; else m.sat[key] = i; }
+      }
+      else if (/ma hoc sinh|ma hs\b|ma so hoc sinh/.test(t)) m.code = i;
+      else if (/cang thang/.test(t)) m.stress = i;
+      else if (/doi mon/.test(t)) m.change = i;
+      else if (/hai long/.test(t)) m.overall = i;
+      else if (/thoi diem|dot khao sat/.test(t)) m.period = i;
+    });
+    return m;
+  }
+  const firstNum = v => { const x = String(v ?? "").replace(",", ".").match(/\d+(\.\d+)?/); return x ? parseFloat(x[0]) : null; };
+  async function importForm() {
+    const f = $("#formFile").files[0], out = $("#importReport");
+    if (!f) { toast("Hãy chọn file kết quả"); return; }
+    out.innerHTML = `<p class="muted small">Đang xử lý…</p>`;
+    try {
+      const rows = await readSheet(f); if (rows.length < 2) throw new Error("File không có dữ liệu");
+      const m = mapFormHeaders(rows[0]);
+      if (m.code == null) throw new Error("Không thấy cột “Mã học sinh” – xem mẫu câu hỏi");
+      const byCode = {};
+      rows.slice(1).forEach(r => {
+        const code = String(r[m.code] || "").trim(); if (!code) return;
+        const n15 = i => { if (i == null) return null; const v = firstNum(r[i]); return v == null ? null : clamp(v, 1, 5); };
+        const e = { period: m.period != null && String(r[m.period] || "").trim() ? String(r[m.period]).trim() : "Khảo sát", source: "form", stamp: String(r[0] || ""),
+          overall: n15(m.overall), stress: n15(m.stress), wantChange: m.change != null ? /^co\b|^yes/.test(norm(r[m.change])) : false, sat: {}, scores: {} };
+        Object.keys(m.sat).forEach(k => { const v = firstNum(r[m.sat[k]]); if (v != null) e.sat[k] = clamp(v, 1, 5); });
+        Object.keys(m.score).forEach(k => { const v = firstNum(r[m.score[k]]); if (v != null) e.scores[k] = clamp(v, 0, 10); });
+        (byCode[code] = byCode[code] || []).push(e);
+      });
+      const report = [];
+      for (const code of Object.keys(byCode)) {
+        const rec = await Archive.get(code);
+        const isCurrent = String(S.profile.code || "").trim() === code;
+        if (!rec && !isCurrent) { report.push({ code, ok: false, msg: "Không có hồ sơ với mã này" }); continue; }
+        const st = rec && rec.data ? merge(blankState(), upgrade(rec.data)) : JSON.parse(JSON.stringify(S));
+        let added = 0, warn = 0;
+        byCode[code].forEach(e => {
+          if (st.tracking.some(x => x.source === "form" && x.stamp === e.stamp && x.period === e.period)) return;
+          const prev = st.tracking[st.tracking.length - 1]; st.tracking.push(e); added++;
+          warn += withState(st, () => warningsFor(e, prev).length);
+        });
+        await Archive.put(recordFromState(st));
+        if (isCurrent) { S.tracking = st.tracking; save(); }
+        report.push({ code, ok: true, msg: `Thêm ${added} lần theo dõi${added < byCode[code].length ? ` (bỏ qua ${byCode[code].length - added} dòng đã nhập trước đó)` : ""}${warn ? ` · ${warn} cảnh báo` : ""}` });
+      }
+      out.innerHTML = `<div class="callout ${report.some(r => !r.ok) ? "warn" : "ok"}" style="margin-top:12px"><h4>Kết quả nhập: ${report.filter(r => r.ok).length}/${report.length} mã học sinh khớp</h4>
+        <div class="table-wrap"><table class="t"><thead><tr><th>Mã HS</th><th>Kết quả</th><th></th></tr></thead><tbody>${report.map(r => `<tr><td>${esc(r.code)}</td><td>${r.ok ? "" : "<span class='cross'>✗</span> "}${esc(r.msg)}</td><td>${r.ok ? `<button type="button" class="btn ghost small" data-action="open-archive" data-code="${esc(r.code)}">Mở</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+        <p class="small muted">Đã nhận: ${["code", "period", "overall", "stress", "change"].filter(k => m[k] != null).length} cột chung, ${Object.keys(m.sat).length} cột hài lòng theo môn, ${Object.keys(m.score).length} cột điểm. Mã chưa khớp: tạo và lưu hồ sơ cho học sinh đó trước, rồi nhập lại file.</p></div>`;
+      fillArchive();
+    } catch (e) { out.innerHTML = `<div class="callout bad" style="margin-top:12px"><p>${esc(e.message)}</p></div>`; }
+  }
+
+  /* ================= TRƯỜNG: LẤY TỪ WEBSITE / NHẬP TAY ================= */
+  const ELECTIVE_RX = { li: /\bvat ?l[iy]\b|(?<!dia )\bl[iy]\b/, hoa: /\bhoa hoc\b|\bhoa\b/, sinh: /\bsinh hoc\b|\bsinh\b/, dia: /\bdia l[iy]\b|\bdia\b/, gdkt: /giao duc kinh te|kinh te (va )?phap luat|\bgdkt|\bktpl\b|\bkt ?& ?pl\b/, cn: /\bcong nghe\b|\bcn\b/, tin: /\btin hoc\b|\btin\b/, an: /\bam nhac\b|\bnhac\b/, mt: /\bm[iy] thuat\b/ };
+  const CD_EXTRA_RX = { toan: /\btoan\b/, van: /\bngu van\b|\bvan\b/, su: /\blich su\b|\bsu\b/ };
+  const CD_RX = Object.assign({}, CD_EXTRA_RX, ELECTIVE_RX);
+  const NOISE = /hoc sinh|thi sinh|sinh vien|sinh nhat|giang sinh|khai sinh|dia chi|dia diem|dia phuong|dia ban|thong tin|tin tuc|tin bai|tin nhan|cong nghe thong tin|van hoa|hoa binh|quan ly|nhac nho|su dung|su kien|su phat trien|lich su hinh thanh/g;
+  const cleanLine = t => " " + norm(t).replace(NOISE, " ") + " ";
+  const findSubjects = (t, rx) => Object.keys(rx).filter(k => rx[k].test(t));
+  function parseCombos(text) {
+    const out = [], seen = new Set();
+    String(text || "").split(/\n|•/).forEach(line => {
+      const t = cleanLine(line); if (t.trim().length < 6) return;
+      const cut = t.indexOf("chuyen de");
+      let subs = findSubjects(cut >= 0 ? t.slice(0, cut) : t, ELECTIVE_RX);
+      let cd = cut >= 0 ? findSubjects(t.slice(cut), CD_RX) : [];
+      if (cut < 0 && t.includes("|")) {
+        // dòng bảng: ô có đúng 4 môn lựa chọn, ô sau có 3 cụm chuyên đề
+        const cells = t.split("|");
+        const i = cells.findIndex(c => findSubjects(c, ELECTIVE_RX).length === 4);
+        if (i >= 0) { subs = findSubjects(cells[i], ELECTIVE_RX); const nx = cells.slice(i + 1).find(c => findSubjects(c, CD_RX).length); cd = nx ? findSubjects(nx, CD_RX) : []; }
+      }
+      if (subs.length !== 4) return;
+      if (cd.length !== 3) cd = [];
+      const k = comboKey(subs); if (seen.has(k)) return; seen.add(k);
+      out.push({ subjects: D.SUBJECT_ORDER.filter(s => subs.includes(s)), cd });
+    });
+    return out;
+  }
+  const CD_SHORT = { toan: "Toán", van: "Văn", su: "Sử" };
+  const comboLine = c => c.subjects.map(subjShort).join(", ") + (c.cd && c.cd.length ? " | " + c.cd.map(k => CD_SHORT[k] || subjShort(k)).join(", ") : "");
+  function parseSubj(txt, isCd) {
+    return [...new Set(String(txt || "").split(/[,;–\-\/]+/).map(x => { const k = findSubjects(cleanLine(x), isCd ? CD_RX : ELECTIVE_RX); return k.length === 1 ? k[0] : null; }).filter(Boolean))];
+  }
+  function openSchoolDialog(existing) {
+    const s = existing || { name: S.profile.schoolOther || "", province: S.profile.province || "", sourceUrl: "", combos: [] };
+    const canScrape = SRV.on && !!SRV.token;
+    dialog(`<h3>${existing ? "Sửa danh sách tổ hợp" : "Thêm / cập nhật trường"}</h3>
+      <div class="grid-2"><div class="field"><label for="ns-name">Tên trường</label><input id="ns-name" type="text" value="${esc(s.name)}" placeholder="VD: THPT Yên Hoà"></div>
+      <div class="field"><label for="ns-prov">Tỉnh/thành</label><input id="ns-prov" type="text" value="${esc(s.province || "")}" placeholder="VD: Hà Nội"></div></div>
+      <h4 style="margin-top:14px">1. Lấy từ website của trường</h4>
+      <div class="row" style="flex-wrap:nowrap"><label class="sr-only" for="ns-url">Link</label><input id="ns-url" type="text" value="${esc(s.sourceUrl || "")}" placeholder="Dán link trang thông báo tổ hợp môn của trường"><button type="button" class="btn ghost" id="ns-fetch" ${canScrape ? "" : "disabled"}>Lấy dữ liệu</button></div>
+      <p class="small muted">${canScrape ? "Máy chủ đọc trang và tự nhận diện các dòng có đúng 4 môn lựa chọn. Thông báo dạng ảnh hoặc PDF scan thì cần nhập tay." : SRV.on ? "Đăng nhập Khu vực giáo viên để dùng chức năng lấy dữ liệu tự động." : "Lấy tự động cần mở web qua máy chủ. Ở chế độ này: mở trang của trường, sao chép nội dung và dán vào ô dưới."}</p>
+      <details ${canScrape ? "" : "open"}><summary class="small">Hoặc dán nội dung trang web vào đây</summary><label class="sr-only" for="ns-paste">Nội dung</label><textarea id="ns-paste" placeholder="Dán nội dung thông báo tổ hợp môn…"></textarea><button type="button" class="btn ghost small" id="ns-parse" style="margin-top:6px">Phân tích nội dung</button></details>
+      <h4 style="margin-top:14px">2. Kiểm tra và chỉnh danh sách</h4>
+      <label class="sr-only" for="ns-combos">Danh sách tổ hợp</label><textarea id="ns-combos">${esc(s.combos.map(comboLine).join("\n"))}</textarea>
+      <p class="small" id="ns-msg"></p>
+      <p class="small muted">Lưu vào ${SRV.on && SRV.token ? "cơ sở dữ liệu chung trên máy chủ (mọi máy dùng được)" : "trình duyệt của máy này"}. Trường cùng tên sẽ được cập nhật.</p>
+      <div class="row"><button type="button" class="btn" id="ns-save">Xác nhận và lưu</button><button type="button" class="btn ghost" id="ns-close">Huỷ</button></div>`, root => {
+      const msg = (t, bad) => { const el = $("#ns-msg", root); el.textContent = t; el.style.color = bad ? "var(--bad)" : "var(--ok)"; };
+      const fill = text => { const found = parseCombos(text); if (!found.length) { msg("Không nhận diện được tổ hợp nào – hãy nhập tay.", true); return; } $("#ns-combos", root).value = found.map(comboLine).join("\n"); msg(`Đã nhận diện ${found.length} tổ hợp. Hãy kiểm tra lại trước khi lưu.`); };
+      $("#ns-close", root).onclick = closeDialog;
+      $("#ns-parse", root).onclick = () => fill($("#ns-paste", root).value);
+      $("#ns-fetch", root).onclick = async () => {
+        const url = $("#ns-url", root).value.trim(); if (!/^https?:\/\//i.test(url)) { msg("Link phải bắt đầu bằng http:// hoặc https://", true); return; }
+        msg("Đang đọc trang…");
+        try { const r = await api("/api/scrape", { method: "POST", body: JSON.stringify({ url }) }); $("#ns-paste", root).value = r.text || ""; fill(r.text || ""); if (!$("#ns-name", root).value && r.title) $("#ns-name", root).value = r.title; }
+        catch (e) { msg("Không đọc được trang: " + e.message + ". Hãy sao chép nội dung và dán vào ô dưới.", true); root.querySelector("details").open = true; }
+      };
+      $("#ns-save", root).onclick = async () => {
+        const name = $("#ns-name", root).value.trim(); const lines = $("#ns-combos", root).value.split(/\n+/).map(x => x.trim()).filter(Boolean);
+        if (!name) { msg("Hãy nhập tên trường.", true); return; }
+        const combos = [], errs = [];
+        lines.forEach((ln, i) => { const [a, b] = ln.split("|"); const subs = parseSubj(a, false); const cd = b ? parseSubj(b, true) : [];
+          const v = validate(subs, cd.length ? cd : null, null);
+          if (!v.r1 || v.r2 === false) errs.push(`Dòng ${i + 1}: ${v.issues.join(" ")}`); else combos.push({ id: "T" + (i + 1), subjects: subs, cd }); });
+        if (errs.length) { msg(errs.join(" "), true); return; }
+        if (!combos.length) { msg("Hãy có ít nhất 1 tổ hợp.", true); return; }
+        const same = allSchools().find(x => !x.demo && (existing ? x.id === existing.id : norm(x.name) === norm(name)));
+        const rec = { id: same ? same.id : "sch-" + Date.now(), name, province: $("#ns-prov", root).value.trim(), sourceUrl: $("#ns-url", root).value.trim(), combos, updatedAt: new Date().toISOString() };
+        try {
+          if (SRV.on && SRV.token) { await api("/api/schools", { method: "POST", body: JSON.stringify(rec) }); await refreshServerSchools(); }
+          else { const loc = localSchools().filter(x => x.id !== rec.id); loc.push(rec); saveLocalSchools(loc); }
+          S.ui.step4School = rec.id; if (!S.profile.schoolId || S.profile.schoolId === "__other") S.profile.schoolId = rec.id;
+          save(); closeDialog(); render(); toast(same ? "Đã cập nhật trường" : "Đã lưu trường");
+        } catch (e) { msg("Không lưu được: " + e.message, true); }
+      };
+    });
+  }
+  async function deleteSchool(id) {
+    const s = findSchool(id); if (!s || s.demo) return;
+    if (!window.confirm("Xoá trường " + s.name + " khỏi cơ sở dữ liệu?")) return;
+    try {
+      if (s.shared) { await api("/api/schools/" + encodeURIComponent(id), { method: "DELETE" }); await refreshServerSchools(); }
+      else saveLocalSchools(localSchools().filter(x => x.id !== id));
+      if (S.ui.step4School === id) S.ui.step4School = ""; save(); render(); toast("Đã xoá trường");
+    } catch (e) { toast("Không xoá được: " + e.message); }
+  }
+
   /* ================= RENDER ================= */
-  const VIEWS = [viewWelcome, viewStep1, viewStep2, viewStep3, viewStep4, viewStep5, viewStep6, viewStep7];
+  const VIEWS = { 0: viewWelcome, 1: viewStep1, 2: viewStep2, 3: viewStep3, 4: viewStep4, 5: viewStep5, 6: viewStep6, 7: viewStep7, 8: viewTeacher };
   function render(opts = {}) {
     const fid = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fid : null;
     const y = window.scrollY;
     renderSteps();
-    $("#main").innerHTML = VIEWS[S.step]();
-    if (opts.top) { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); }
-    else window.scrollTo(0, y);
+    $("#main").innerHTML = (VIEWS[S.step] || viewWelcome)();
+    if (opts.top) { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); } else window.scrollTo(0, y);
     if (fid) { const el = document.querySelector(`[data-fid="${fid}"]`); if (el) el.focus({ preventScroll: true }); }
     const tf = $("#trackForm"); if (tf) tf.addEventListener("submit", onTrackSubmit);
+    const lf = $("#loginForm"); if (lf) lf.addEventListener("submit", onLogin);
+    const as = $("#arcSearch"); if (as) as.addEventListener("input", () => { S.ui.arcSearch = as.value; save(); fillArchive(); });
+    if (S.step === 8) fillArchive();
   }
-  function go(n) { S.step = clamp(n, 0, 7); save(); render({ top: true }); document.dispatchEvent(new CustomEvent("ctv:step", { detail: S.step })); }
+  function go(n) { S.step = clamp(n, 0, 8); save(); render({ top: true }); document.dispatchEvent(new CustomEvent("ctv:step", { detail: S.step })); }
 
   /* ================= SỰ KIỆN ================= */
+  document.addEventListener("toggle", e => {
+    const d = e.target; if (!d.dataset || !d.dataset.why) return;
+    const set = new Set(S.ui.openWhy); if (d.open) set.add(d.dataset.why); else set.delete(d.dataset.why); S.ui.openWhy = [...set]; save();
+  }, true);
   document.addEventListener("click", e => {
     const g = e.target.closest("[data-go]");
     if (g && !g.disabled) { go(+g.dataset.go); return; }
@@ -711,279 +1044,111 @@
     const A = b.dataset.action, ds = b.dataset;
     switch (A) {
       case "role": S.role = ds.role; save(); render(); document.dispatchEvent(new CustomEvent("ctv:role")); break;
-      case "tile": {
-        const scope = ds.scope;
-        const arr = scope === "hero" ? (S.ui.heroPick = S.ui.heroPick || []) : scope === "tpb" ? (S.ui.tpbPick = S.ui.tpbPick || []) : S.builder.subjects;
-        const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else if (arr.length < 4) arr.push(ds.k);
-        if (scope === "tpb" && arr.length === 4) { S.tests.tpb.combo = { subjects: arr.slice() }; S.ui.tpbPick = []; }
-        save(); render(); break;
-      }
+      case "tile": { const arr = (S.ui.heroPick = S.ui.heroPick || []); const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else if (arr.length < 4) arr.push(ds.k); save(); render(); break; }
       case "toggle-arr": { const arr = getPath(ds.path); const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else arr.push(ds.k);
-        if (ds.path === "profile.liked") { const j = S.profile.disliked.indexOf(ds.k); if (i < 0 && j >= 0) S.profile.disliked.splice(j, 1); }
-        if (ds.path === "profile.disliked") { const j = S.profile.liked.indexOf(ds.k); if (i < 0 && j >= 0) S.profile.liked.splice(j, 1); }
-        if (ds.path === "constraints.must") { const j = S.constraints.exclude.indexOf(ds.k); if (i < 0 && j >= 0) S.constraints.exclude.splice(j, 1); }
-        if (ds.path === "constraints.exclude") { const j = S.constraints.must.indexOf(ds.k); if (i < 0 && j >= 0) S.constraints.must.splice(j, 1); }
+        if (i < 0) {
+          const others = { "profile.liked": ["profile.disliked"], "profile.disliked": ["profile.liked", "constraints.must"], "constraints.must": ["profile.disliked"] }[ds.path] || [];
+          others.forEach(o => { const a2 = getPath(o); const j = a2.indexOf(ds.k); if (j >= 0) a2.splice(j, 1); });
+        }
         save(); render(); break; }
       case "test-tab": S.ui.testTab = ds.tab; save(); render({ top: true }); break;
       case "hol": S.tests.holland[ds.k][+ds.i] = +ds.v; save(); render(); break;
       case "pers": S.tests.pers[ds.k][+ds.i] = ds.v; save(); render(); break;
       case "gar": S.tests.gardner[ds.k][+ds.i] = +ds.v; save(); render(); break;
-      case "tpb": S.tests.tpb.ans[ds.k][+ds.i] = +ds.v; save(); render(); break;
-      case "tpb-clear": S.tests.tpb.combo = null; D.TPB.forEach(t => S.tests.tpb.ans[t.key] = Array(t.items.length).fill(null)); save(); render(); break;
-      case "tpb-set": S.tests.tpb.combo = { subjects: ds.subs.split(",") }; D.TPB.forEach(t => S.tests.tpb.ans[t.key] = Array(t.items.length).fill(null)); S.ui.testTab = "tpb"; save(); go(2); break;
       case "fill-demo": fillDemo(ds.test); save(); render(); toast("Đã điền ngẫu nhiên để thử demo"); break;
       case "cfb": S.careerFb[ds.name] = S.careerFb[ds.name] === ds.v ? undefined : ds.v; save(); render(); break;
       case "toggle-all-careers": S.ui.showAllCareers = !S.ui.showAllCareers; save(); render(); break;
-      case "cd": { const arr = S.builder.cd; const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else if (arr.length < 3) arr.push(ds.k); save(); render(); break; }
+      case "toggle-diagram": S.ui.showDiagram = !S.ui.showDiagram; save(); render(); break;
       case "shortlist": { const i = S.shortlist.indexOf(ds.key); if (i >= 0) S.shortlist.splice(i, 1); else S.shortlist.push(ds.key); save(); render(); break; }
-      case "shortlist-builder": { const sid = S.ui.step4School || ""; const sc = findSchool(sid); const v = validate(S.builder.subjects, S.builder.cd.length ? S.builder.cd : null, sc);
-        if (!v.r1) { toast("Cần đủ 4 môn khác nhau"); break; }
-        const key = (v.offered ? sid : "custom") + "|" + comboKey(S.builder.subjects) + "|" + S.builder.cd.join(",");
-        if (!S.shortlist.includes(key)) S.shortlist.push(key); save(); render(); toast("Đã thêm vào danh sách cân nhắc"); break; }
       case "unshortlist": S.shortlist = S.shortlist.filter(k => k !== ds.key); save(); render(); break;
-      case "set-final": { S.final.schoolId = findSchool(ds.school) ? ds.school : ""; S.final.comboKey = ds.ck; S.final.confirmed = false;
-        const sk = S.shortlist.find(k => k.split("|")[1] === ds.ck); S.final.cd = sk && sk.split("|")[2] ? sk.split("|")[2].split(",") : [];
+      case "set-final": { const sch = findSchool(ds.school); S.final.schoolId = sch ? ds.school : ""; S.final.comboKey = ds.ck; S.final.confirmed = false;
+        const c = sch ? sch.combos.find(x => comboKey(x.subjects) === ds.ck) : null; S.final.cd = c && c.cd ? c.cd : [];
         save(); toast("Đã đặt làm phương án chính"); if (S.step !== 6) go(6); else render(); break; }
       case "clear-final": S.final.comboKey = ""; S.final.schoolId = ""; S.final.confirmed = false; save(); render(); break;
       case "check": S.final.checks[ds.k] = b.checked; if (ds.k !== "talked") S.final.confirmed = false; save(); render(); break;
       case "confirm-final": S.final.confirmed = true; save(); render(); toast("Đã xác nhận phương án chính thức"); break;
       case "print": window.print(); break;
       case "copy-summary": copyText(summaryText()); break;
-      case "add-school": openAddSchool(); break;
-      case "del-school": S.schools = S.schools.filter(s => s.id !== ds.id); if (S.ui.step4School === ds.id) S.ui.step4School = ""; save(); render(); break;
+      case "add-school": openSchoolDialog(null); break;
+      case "edit-school": openSchoolDialog(findSchool(ds.id)); break;
+      case "del-school": deleteSchool(ds.id); break;
       case "del-track": S.tracking.splice(+ds.i, 1); save(); render(); break;
       case "open-profile-code": openProfileCode(); break;
-      case "record-consent": S.ui.recordConsent = b.checked; render(); break;
-      case "submit-record": submitRecord(true, b); break;
-      case "update-record": submitRecord(false, b); break;
+      case "save-profile": saveProfileFlow(); break;
+      case "open-archive": openArchive(ds.code); break;
+      case "del-archive": if (window.confirm("Xoá hồ sơ " + ds.code + "?")) Archive.del(ds.code).then(() => { toast("Đã xoá hồ sơ"); fillArchive(); }, err => toast("Không xoá được: " + err.message)); break;
+      case "import-form": importForm(); break;
+      case "load-by-code": { const code = String(($("#f-code") || {}).value || S.profile.code || "").trim(); if (!code) { toast("Hãy nhập mã học sinh"); break; } if (SRV.on && !SRV.token) { toast("Đăng nhập Khu vực giáo viên để mở hồ sơ đã lưu"); break; } openArchive(code); break; }
+      case "logout": SRV.token = ""; try { sessionStorage.removeItem(KEY_TOKEN); } catch (err) { /* bỏ qua */ } render(); toast("Đã đăng xuất"); break;
     }
   });
   document.addEventListener("change", e => {
-    const el = e.target.closest("[data-bind]");
-    if (!el) return;
-    let v = el.value;
-    setPath(el.dataset.bind, v); save();
-    if (el.dataset.rerender) render();
+    const el = e.target.closest("[data-bind]"); if (!el) return;
+    setPath(el.dataset.bind, el.value); save();
+    if (el.dataset.rerender) render(); else renderSteps();
   });
-
+  async function onLogin(e) {
+    e.preventDefault();
+    try { const r = await api("/api/login", { method: "POST", body: JSON.stringify({ password: $("#tpass").value }) }); SRV.token = r.token; try { sessionStorage.setItem(KEY_TOKEN, r.token); } catch (err) { /* bỏ qua */ } await refreshServerSchools(); render(); toast("Đã đăng nhập"); }
+    catch (err) { toast("Đăng nhập không thành công: " + err.message); }
+  }
   function fillDemo(test) {
     const r = n => Math.floor(Math.random() * n);
     if (test === "holland") D.HOLLAND.forEach((g, gi) => { const bias = [3, 2, 1, 1, 2, 1][(gi + r(6)) % 6]; S.tests.holland[g.key] = g.items.map(() => clamp(bias + r(3) - 1, 0, 4)); });
     if (test === "pers") D.PERSONALITY.forEach(p => S.tests.pers[p.dim] = p.items.map(() => r(2) ? "a" : "b"));
     if (test === "gardner") D.GARDNER.forEach(g => S.tests.gardner[g.key] = g.items.map(() => 1 + r(5)));
-    if (test === "tpb") D.TPB.forEach(t => S.tests.tpb.ans[t.key] = t.items.map(() => 2 + r(4)));
   }
   function onTrackSubmit(e) {
     e.preventDefault();
     const f = new FormData(e.target); const fc = finalCombo(); if (!fc) return;
     const num = (k, lo, hi) => { const v = parseFloat(String(f.get(k) || "").replace(",", ".")); return isNaN(v) ? null : clamp(v, lo, hi); };
-    const entry = { period: f.get("period"), overall: num("overall", 1, 5), stress: num("stress", 1, 5), wantChange: !!f.get("wantChange"), scores: {}, sat: {} };
+    const entry = { period: f.get("period"), source: "manual", overall: num("overall", 1, 5), stress: num("stress", 1, 5), wantChange: !!f.get("wantChange"), scores: {}, sat: {} };
     fc.subjects.forEach(s => { entry.scores[s] = num("score-" + s, 0, 10); entry.sat[s] = num("sat-" + s, 1, 5); });
-    S.tracking.push(entry); save(); render(); toast("Đã lưu lần theo dõi");
+    S.tracking.push(entry); save(); render(); toast("Đã ghi lần theo dõi – nhớ bấm “Lưu hồ sơ”");
   }
   function copyText(t) {
     const done = () => toast("Đã sao chép");
-    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, () => fallback());
-    else fallback();
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, () => fallback()); else fallback();
     function fallback() { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) { toast("Không sao chép được – hãy bôi đen và sao chép thủ công"); } ta.remove(); }
   }
 
   /* ================= HỘP THOẠI ================= */
-  function dialog(html, onOpen) {
-    const d = $("#dialog"); $("#dialogInner").innerHTML = html; if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", "");
-    if (onOpen) onOpen($("#dialogInner"));
-  }
+  function dialog(html, onOpen) { const d = $("#dialog"); $("#dialogInner").innerHTML = html; if (typeof d.showModal === "function") { if (!d.open) d.showModal(); } else d.setAttribute("open", ""); if (onOpen) onOpen($("#dialogInner")); }
   function closeDialog() { const d = $("#dialog"); if (d.close) d.close(); else d.removeAttribute("open"); }
   const b64 = s => btoa(unescape(encodeURIComponent(s)));
   const unb64 = s => decodeURIComponent(escape(atob(s)));
   function openProfileCode() {
     const code = b64(JSON.stringify(S));
-    dialog(`${RECORDS_URL ? `<h3>Mở hồ sơ đã nộp</h3>
-      <p class="small">Nhập mã phiếu nhận được sau khi nộp ở Bước 5 để tiếp tục Bước 6–7. Dữ liệu đang có trên máy này sẽ được thay thế.</p>
-      <div class="row"><label class="sr-only" for="rc-code">Mã phiếu</label><input id="rc-code" type="text" autocomplete="off" spellcheck="false" placeholder="VD: 2026minhanh" style="max-width:220px">
-        <button type="button" class="btn" id="rc-load">Mở hồ sơ</button></div>
-      <p class="small" id="rc-err" style="color:var(--bad)"></p><hr class="rule">` : ""}<h3>Mã hồ sơ</h3>
-      <p class="small">Mã hồ sơ chứa toàn bộ dữ liệu đã nhập trên trình duyệt này. Có thể sao chép hoặc tải tệp để tự lưu. Vì an toàn, bản thử nghiệm không hỗ trợ nhập/khôi phục mã từ nguồn ngoài.</p>
+    dialog(`<h3>Mã hồ sơ</h3>
+      <p class="small">Mã hồ sơ chứa toàn bộ dữ liệu đã nhập trên trình duyệt này. Lưu lại để tiếp tục ở máy khác, hoặc dán mã đã có để khôi phục. Giáo viên nên dùng “Lưu hồ sơ” ở Bước 7 để lưu vào danh mục.</p>
       <h4>Tóm tắt</h4><div class="code-box">${esc(summaryText())}</div>
-      <h4 style="margin-top:12px">Mã đầy đủ</h4><textarea id="pcode" spellcheck="false">${esc(code)}</textarea>
+      <h4 style="margin-top:12px">Mã đầy đủ</h4><textarea id="pcode" spellcheck="false" aria-label="Mã hồ sơ">${esc(code)}</textarea>
       <div class="row" style="margin-top:12px">
         <button type="button" class="btn" id="pc-copy">Sao chép mã</button>
         <button type="button" class="btn ghost" id="pc-dl">Tải file hồ sơ (.json)</button>
+        <button type="button" class="btn ghost" id="pc-load">Khôi phục từ mã đã dán</button>
         <span class="spacer"></span>
-        <button type="button" class="btn ghost small" id="pc-reset">Xoá dữ liệu, làm lại</button>
+        <button type="button" class="btn ghost small" id="pc-reset">Hồ sơ mới</button>
         <button type="button" class="btn ghost small" id="pc-close">Đóng</button>
       </div>`, root => {
       $("#pc-copy", root).onclick = () => copyText($("#pcode", root).value);
-      $("#pc-dl", root).onclick = () => { const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ho-so-tu-van-" + (S.profile.nickname || "hoc-sinh") + ".json"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
-      $("#pc-reset", root).onclick = () => { if (window.confirm("Xoá toàn bộ dữ liệu đã nhập trên trình duyệt này?")) { S = blankState(); save(); closeDialog(); render({ top: true }); toast("Đã xoá dữ liệu"); } };
-      $("#pc-close", root).onclick = closeDialog;
-      if (RECORDS_URL) $("#rc-load", root).onclick = () => loadRecord($("#rc-code", root).value, $("#rc-err", root), $("#rc-load", root));
-    });
-  }
-  function openAddSchool() {
-    dialog(`<h3>Thêm trường và tổ hợp</h3>
-      <p class="small">Nhập theo thông báo chính thức của trường. Mỗi dòng một tổ hợp: <b>4 môn</b>, có thể thêm <b>| 3 cụm chuyên đề</b>.<br>
-      Viết tắt môn: Địa, KT&PL (hoặc GDKT), Lí, Hoá, Sinh, CN, Tin, Nhạc, Mĩ thuật. Chuyên đề thêm: Văn, Toán, Sử.</p>
-      <div class="grid-2"><div class="field"><label for="ns-name">Tên trường</label><input id="ns-name" type="text" placeholder="VD: THPT Yên Hoà"></div>
-      <div class="field"><label for="ns-prov">Tỉnh/thành</label><input id="ns-prov" type="text" placeholder="VD: Hà Nội"></div></div>
-      <div class="field" style="margin-top:10px"><label for="ns-combos">Danh sách tổ hợp</label><textarea id="ns-combos" placeholder="Lí, Hoá, Sinh, Tin | Toán, Lí, Hoá&#10;Địa, KT&PL, Tin, CN | Văn, Sử, Địa"></textarea></div>
-      <p class="small" id="ns-err" style="color:var(--bad)"></p>
-      <div class="row"><button type="button" class="btn" id="ns-save">Lưu trường</button><button type="button" class="btn ghost" id="ns-close">Huỷ</button></div>`, root => {
-      $("#ns-close", root).onclick = closeDialog;
-      $("#ns-save", root).onclick = () => {
-        const name = $("#ns-name", root).value.trim(); const lines = $("#ns-combos", root).value.split(/\n+/).map(x => x.trim()).filter(Boolean);
-        if (!name) { $("#ns-err", root).textContent = "Hãy nhập tên trường."; return; }
-        const combos = [], errs = [];
-        lines.forEach((ln, i) => {
-          const [a, b] = ln.split("|"); const subs = parseSubj(a, false); const cd = b ? parseSubj(b, true) : [];
-          const v = validate(subs, cd.length ? cd : null, null);
-          if (!v.r1 || v.r2 === false) errs.push(`Dòng ${i + 1}: ${v.issues.join(" ")}`); else combos.push({ id: "T" + (i + 1), subjects: subs, cd });
-        });
-        if (errs.length) { $("#ns-err", root).textContent = errs.join(" "); return; }
-        if (!combos.length) { $("#ns-err", root).textContent = "Hãy nhập ít nhất 1 tổ hợp."; return; }
-        const id = "u-" + Date.now();
-        S.schools.push({ id, name, province: $("#ns-prov", root).value.trim(), combos }); S.ui.step4School = id;
-        if (!S.profile.schoolId || S.profile.schoolId === "__other") S.profile.schoolId = id;
-        save(); closeDialog(); render(); toast("Đã lưu trường");
+      $("#pc-dl", root).onclick = () => { const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ho-so-" + (S.profile.code || S.profile.nickname || "hoc-sinh") + ".json"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+      $("#pc-load", root).onclick = () => {
+        const txt = $("#pcode", root).value.trim();
+        try { const obj = upgrade(txt.startsWith("{") ? JSON.parse(txt) : JSON.parse(unb64(txt))); if (!obj || obj.v !== 2) throw 0; S = merge(blankState(), obj); save(); closeDialog(); render({ top: true }); toast("Đã khôi phục hồ sơ"); }
+        catch (e) { toast("Mã không hợp lệ – hãy dán đúng mã hoặc nội dung file .json"); }
       };
+      $("#pc-reset", root).onclick = () => { if (window.confirm("Bắt đầu hồ sơ mới? Dữ liệu đang nhập chưa lưu sẽ bị xoá.")) { const role = S.role; S = blankState(); S.role = role; save(); closeDialog(); render({ top: true }); toast("Đã tạo hồ sơ mới"); } };
+      $("#pc-close", root).onclick = closeDialog;
     });
-  }
-  function parseSubj(txt, isCd) {
-    const map = { "địa": "dia", "dia": "dia", "địa lí": "dia", "địa lý": "dia", "kt&pl": "gdkt", "gdkt": "gdkt", "gdktpl": "gdkt", "gdkt&pl": "gdkt", "ktpl": "gdkt", "lí": "li", "lý": "li", "li": "li", "vật lí": "li", "vật lý": "li",
-      "hoá": "hoa", "hóa": "hoa", "hoa": "hoa", "hoá học": "hoa", "hóa học": "hoa", "sinh": "sinh", "sinh học": "sinh", "cn": "cn", "công nghệ": "cn", "tin": "tin", "tin học": "tin",
-      "nhạc": "an", "âm nhạc": "an", "mĩ thuật": "mt", "mỹ thuật": "mt", "mt": "mt", "văn": "van", "ngữ văn": "van", "toán": "toan", "sử": "su", "lịch sử": "su" };
-    return (txt || "").split(/[,;–\-\/]+/).map(x => map[x.trim().toLowerCase()]).filter(k => k && (isCd ? D.CHUYEN_DE[k] : D.SUBJECTS[k]));
   }
 
-  /* ================= KHO HỒ SƠ (máy chủ) ================= */
-  function submitBox() {
-    if (!RECORDS_URL) return `<div class="callout info no-print"><p class="small">Bản này chưa kết nối kho lưu hồ sơ. Hãy in hoặc tải mã hồ sơ để lưu.</p></div>`;
-    const ok = !!S.ui.recordConsent && !!S.profile.nickname.trim();
-    return `<div class="callout ${S.record.code ? "ok" : "info"} no-print" style="margin-top:16px">
-      <h4>Nộp hồ sơ cho nhà trường</h4>
-      ${DEMO ? `<p class="small muted">Chế độ demo: hồ sơ chỉ lưu trong trình duyệt này và xem được ở <a href="admin/" target="_blank" rel="noopener">trang quản trị demo</a>.</p>` : ""}
-      ${S.record.code ? `<p class="small">Hồ sơ này đã có mã phiếu <b>${esc(S.record.code)}</b>. Nộp lại sẽ cập nhật đúng phiếu đó.</p>` : ""}
-      <p class="small">Sau khi nộp, phiếu được lưu để giáo viên tư vấn xem; dữ liệu trên máy này được xoá để bắt đầu lượt mới. ${T("Bạn", "Học sinh")} nhận một <b>mã phiếu</b> để mở lại hồ sơ ở Bước 6–7.</p>
-      <label class="row small" style="gap:6px"><input type="checkbox" data-action="record-consent" ${S.ui.recordConsent ? "checked" : ""}> ${T("Mình", "Học sinh và gia đình")} đồng ý gửi phiếu này cho nhà trường lưu trữ phục vụ tư vấn chọn môn.</label>
-      ${S.profile.nickname.trim() ? "" : `<p class="small" style="color:var(--bad)">Cần nhập tên gọi ở Bước 1 để thầy cô nhận ra phiếu. <button type="button" class="btn ghost small" data-go="1">Về Bước 1</button></p>`}
-      <div class="row" style="margin-top:8px"><button type="button" class="btn ok" data-action="submit-record" ${ok ? "" : "disabled"}>Nộp hồ sơ và bắt đầu lượt mới</button></div>
-    </div>`;
-  }
-  function updateBar() {
-    if (!RECORDS_URL || !S.record.code) return "";
-    return `<div class="row no-print small" style="margin-top:16px;gap:10px"><span>Mã phiếu: <b>${esc(S.record.code)}</b>${S.record.savedAt ? " · lưu lần cuối " + esc(new Date(S.record.savedAt).toLocaleString("vi-VN")) : ""}</span>
-      <button type="button" class="btn ghost small" data-action="update-record">Cập nhật hồ sơ lên kho</button></div>`;
-  }
-  function recordPayload() {
-    const p = S.profile, sch = findSchool(p.schoolId), hs = hollandStats(), fc = finalCombo();
-    const state = JSON.parse(JSON.stringify(S));
-    delete state.record; state.ui = {};
-    return {
-      code: S.record.code || undefined, consent: true, state,
-      summary: {
-        role: S.role || "", nickname: p.nickname.trim().slice(0, 300), school: (sch ? sch.name : p.schoolOther || "").slice(0, 300),
-        holland: hs.answered ? hollandLabel(hs).replace(/<[^>]*>/g, "").slice(0, 300) : "",
-        finalCombo: fc ? comboLabel(fc.subjects).slice(0, 300) : "",
-        shortlist: S.shortlist.map(k => comboLabel(k.split("|")[1].split("+"))).join("; ").slice(0, 300)
-      },
-      summaryText: summaryText().slice(0, 6000)
-    };
-  }
-  /* ----- Chế độ demo: kho giả lập trong trình duyệt (recordsUrl = "demo") ----- */
-  const DEMO = RECORDS_URL === "demo";
-  const DEMO_KEY = "ctv_demo_records_v1";
-  function demoDb() { try { const d = JSON.parse(localStorage.getItem(DEMO_KEY) || "{}"); return d && typeof d === "object" ? d : {}; } catch (e) { return {}; } }
-  function demoSlug(name) {
-    const t = String(name || "").toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
-    return t.slice(0, 20) || "hocsinh";
-  }
-  function demoCode(raw) { const c = String(raw || "").toLowerCase().replace(/[\s-]/g, ""); return /^\d{4}[a-z0-9]{1,40}$/.test(c) ? c : null; }
-  function demoError(status, msg) { const e = new Error(msg); e.status = status; return e; }
-  function demoFetch(path, body) {
-    return new Promise((resolve, reject) => {
-      const db = demoDb(), now = new Date().toISOString();
-      if (path === "/api/records/load") {
-        const code = demoCode(body && body.code), r = code && db[code];
-        return r ? resolve({ code, state: r.state, updatedAt: r.updated_at }) : reject(demoError(404, "Code not found"));
-      }
-      if (path !== "/api/records" || !body || body.consent !== true || !body.state || !body.summary || !body.summary.nickname) return reject(demoError(400, "Invalid"));
-      const f = { role: body.summary.role, nickname: body.summary.nickname, school: body.summary.school, holland: body.summary.holland,
-        final_combo: body.summary.finalCombo, shortlist: body.summary.shortlist, summary_text: body.summaryText, state: body.state };
-      let code = body.code ? demoCode(body.code) : null, created = false;
-      if (body.code) {
-        if (!code || !db[code]) return reject(demoError(404, "Code not found"));
-        db[code] = Object.assign(db[code], f, { updated_at: now, revision: db[code].revision + 1, consent_at: now });
-      } else {
-        const base = new Date().getFullYear() + demoSlug(f.nickname);
-        code = base; for (let n = 2; db[code]; n++) code = base + n;
-        db[code] = Object.assign({ code, created_at: now, updated_at: now, revision: 1, consent_at: now }, f); created = true;
-      }
-      try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) { return reject(demoError(500, "storage")); }
-      resolve({ code, created, savedAt: now });
-    });
-  }
-  async function recordsFetch(path, body) {
-    if (DEMO) return demoFetch(path, body);
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
-    try {
-      const r = await fetch(RECORDS_URL + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal, credentials: "omit" });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) { const e = new Error(data.error || "HTTP " + r.status); e.status = r.status; throw e; }
-      return data;
-    } finally { clearTimeout(t); }
-  }
-  async function submitRecord(startNew, btn) {
-    if (btn) btn.disabled = true;
-    let data;
-    try { data = await recordsFetch("/api/records", recordPayload()); }
-    catch (e) {
-      if (btn) btn.disabled = false;
-      toast(e.status === 404 ? "Không tìm thấy mã phiếu trên máy chủ" : e.status === 429 ? "Gửi quá nhiều lần, hãy thử lại sau ít phút" : "Chưa lưu được – kiểm tra kết nối rồi thử lại");
-      return;
-    }
-    if (!startNew) { S.record = { code: data.code, savedAt: data.savedAt }; save(); render(); toast("Đã cập nhật hồ sơ " + data.code); return; }
-    // Đã lưu trên máy chủ: xoá dữ liệu máy này ngay, rồi mới hiện mã phiếu.
-    try { localStorage.removeItem(KEY); } catch (e) { /* bỏ qua */ }
-    const restart = () => { try { localStorage.removeItem(KEY); } catch (e) { /* bỏ qua */ } window.location.reload(); };
-    dialog(`<h3>Đã nộp hồ sơ</h3>
-      <p>Mã phiếu của ${esc(S.profile.nickname)}:</p>
-      <p style="font-size:1.8rem;font-weight:800;letter-spacing:.08em;margin:8px 0">${esc(data.code)}</p>
-      <p class="small">Hãy chụp ảnh hoặc ghi lại mã này. Dùng mã ở nút “Mở hồ sơ bằng mã phiếu” trên trang đầu để tiếp tục Bước 6–7. Dữ liệu trên máy này đã được xoá.</p>
-      <div class="row" style="margin-top:12px"><button type="button" class="btn ghost" id="rd-copy">Sao chép mã</button><span class="spacer"></span><button type="button" class="btn" id="rd-new">Bắt đầu lượt mới</button></div>`, root => {
-      $("#rd-copy", root).onclick = () => copyText(data.code);
-      $("#rd-new", root).onclick = restart;
-      $("#dialog").addEventListener("close", restart, { once: true });
-    });
-  }
-  function stripUnsafe(v) {
-    if (Array.isArray(v)) return v.map(stripUnsafe);
-    if (v && typeof v === "object") { const o = {}; Object.keys(v).forEach(k => { if (k !== "__proto__" && k !== "constructor" && k !== "prototype") o[k] = stripUnsafe(v[k]); }); return o; }
-    return v;
-  }
-  async function loadRecord(raw, errEl, btn) {
-    const code = String(raw || "").toLowerCase().replace(/[\s-]/g, "");
-    if (!/^\d{4}[a-z0-9]{1,40}$/.test(code)) { errEl.textContent = "Mã phiếu gồm năm và tên gọi viết liền không dấu, ví dụ 2026minhanh."; return; }
-    errEl.textContent = ""; btn.disabled = true;
-    try {
-      const data = await recordsFetch("/api/records/load", { code });
-      const st = stripUnsafe(data.state);
-      if (!st || st.v !== 1 || typeof st.profile !== "object") throw new Error("bad state");
-      S = merge(blankState(), st);
-      S.record = { code: data.code, savedAt: data.updatedAt || "" };
-      S.ui = blankState().ui;
-      S.step = 6; save(); closeDialog(); render({ top: true }); toast("Đã mở hồ sơ " + data.code);
-    } catch (e) {
-      btn.disabled = false;
-      errEl.textContent = e.status === 404 ? "Không tìm thấy mã phiếu này." : e.status === 429 ? "Thử quá nhiều lần, hãy chờ ít phút." : "Không mở được hồ sơ – kiểm tra kết nối rồi thử lại.";
-    }
-  }
-
-  /* ================= API cho chatbot ================= */
+  /* ================= API cho trợ lý tư vấn ================= */
   window.CTV_APP = {
-    state: () => S, go, summaryText, rankedCareers, priorityCareers, analyzeCombo, hollandStats, findSchool, allSchools,
-    subjName, comboLabel, roleName: () => ROLE_NAME[S.role] || null
+    state: () => S, go, summaryText, rankedCareers, priorityCareers, analyzeCombo, recommendForSchool, hollandStats, findSchool, allSchools,
+    subjName, comboLabel, parseCombos, roleName: () => ROLE_NAME[S.role] || null
   };
 
-  if (DEMO) { const w = $("#adminLinkWrap"); if (w) w.hidden = false; }
   render();
+  detectServer().then(() => { if (SRV.on) render(); });
 })();

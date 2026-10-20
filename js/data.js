@@ -36,7 +36,7 @@ window.CTV_DATA = (function () {
     { key: "khtn_li", name: "KHTN – mạch Vật lí" }, { key: "khtn_hoa", name: "KHTN – mạch Hoá học" }, { key: "khtn_sinh", name: "KHTN – mạch Sinh học" },
     { key: "su", name: "LS&ĐL – phân môn Lịch sử" }, { key: "dia", name: "LS&ĐL – phân môn Địa lí" },
     { key: "gdcd", name: "Giáo dục công dân" }, { key: "cn", name: "Công nghệ" }, { key: "tin", name: "Tin học" },
-    { key: "an", name: "Âm nhạc (năng khiếu, 0–10)" }, { key: "mt", name: "Mĩ thuật (năng khiếu, 0–10)" }
+    { key: "an", name: "Âm nhạc", passFail: true }, { key: "mt", name: "Mĩ thuật", passFail: true }
   ];
 
   /* ---------- Tổ hợp xét tuyển (tham khảo – mỗi trường ĐH mỗi khác) ----------
@@ -130,15 +130,7 @@ window.CTV_DATA = (function () {
     { key: "thienNhien", name: "Thiên nhiên", items: ["Mình thích tìm hiểu cây cối, động vật, môi trường", "Mình dễ nhận biết, phân loại các loài/hiện tượng tự nhiên", "Mình quan tâm biến đổi khí hậu, bảo vệ môi trường"] }
   ];
   const LIKERT5 = ["Hoàn toàn không giống", "Ít giống", "Phân vân", "Khá giống", "Rất giống mình"];
-  const AGREE5 = ["Hoàn toàn không đồng ý", "Không đồng ý", "Phân vân", "Đồng ý", "Hoàn toàn đồng ý"];
 
-  /* ---------- TPB (bản dùng tạm, 15 câu) ---------- */
-  const TPB = [
-    { key: "ATT", name: "Thái độ", items: ["Với mình, chọn tổ hợp [X] là có lợi", "Học các môn trong [X] là thú vị với mình", "Chọn [X] là lựa chọn đáng giá cho tương lai của mình", "Tổ hợp [X] giúp mình tiến gần ngành nghề mong muốn"] },
-    { key: "SN", name: "Chuẩn chủ quan", items: ["Bố mẹ/người giám hộ ủng hộ mình chọn [X]", "Thầy cô mình tin tưởng cho rằng mình nên chọn [X]", "Những người quan trọng với mình mong mình chọn [X]", "Nhiều bạn có năng lực giống mình cũng chọn [X]"] },
-    { key: "PBC", name: "Nhận thức kiểm soát", items: ["Mình tự tin học tốt cả 4 môn trong [X]", "Việc chọn [X] phần lớn do mình quyết định", "Mình có đủ điều kiện (thời gian, tài liệu, hỗ trợ) để theo [X]", "Mình có khả năng được xếp vào [X] ở trường"] },
-    { key: "INT", name: "Ý định", items: ["Mình dự định đăng ký [X]", "Mình sẵn sàng nỗ lực để học tốt [X]", "Khả năng mình đăng ký [X] là rất cao"] }
-  ];
 
   /* ---------- Trọng số liên hệ sở thích → môn lựa chọn ---------- */
   const HOLLAND_SUBJ = {
@@ -219,6 +211,45 @@ window.CTV_DATA = (function () {
       ] }
   ];
 
+  /* ---------- Thang mô tả cho Bước 7 ---------- */
+  const SATISFACTION = [
+    "Rất không hài lòng – thấy đã chọn sai, không muốn tiếp tục học các môn này",
+    "Không hài lòng – nhiều môn không hợp, học thấy nặng nề, hay nghĩ đến chuyện đổi môn",
+    "Bình thường – có môn hợp, có môn chưa hợp nhưng vẫn theo được",
+    "Hài lòng – phần lớn các môn hợp sở thích và năng lực, học có hứng thú",
+    "Rất hài lòng – đúng mong muốn, học hứng thú, thấy rõ ích lợi cho định hướng nghề nghiệp"
+  ];
+  const SUBJECT_SAT = [
+    "Rất không hài lòng – không theo kịp, không thấy hứng thú",
+    "Không hài lòng – thấy khó, ít hứng thú",
+    "Bình thường – theo được, hứng thú vừa phải",
+    "Hài lòng – theo tốt, có hứng thú",
+    "Rất hài lòng – học tốt và rất thích môn này"
+  ];
+  const STRESS = [
+    "Rất thấp – thoải mái, ngủ đủ, theo kịp bài vở",
+    "Thấp – đôi khi áp lực trước kiểm tra nhưng nhanh chóng ổn lại",
+    "Trung bình – thường áp lực vào mùa kiểm tra, đôi lúc thiếu ngủ, vẫn tự cân bằng được",
+    "Cao – thường xuyên lo lắng, mất ngủ hoặc mệt mỏi vì học, khó theo kịp, cần được hỗ trợ",
+    "Rất cao – căng thẳng kéo dài, ảnh hưởng ăn ngủ và sức khoẻ, muốn bỏ cuộc; cần gặp giáo viên/tư vấn tâm lý ngay"
+  ];
+  const PERIODS = ["Giữa HK1", "Cuối HK1", "Giữa HK2", "Cuối năm lớp 10", "Cuối HK1 lớp 11", "Cuối năm lớp 11", "Cuối HK1 lớp 12"];
+
+  /* ---------- Từ khoá năng khiếu → nhóm ngành (Bước 3) ---------- */
+  const TALENT_KEYS = [
+    { k: ["robot", "stem", "khoa học kỹ thuật", "kĩ thuật", "lắp ráp", "điện tử"], groups: ["Công nghệ – Kỹ thuật"] },
+    { k: ["lập trình", "tin học", "code", "máy tính"], groups: ["Công nghệ – Kỹ thuật"] },
+    { k: ["vẽ", "mĩ thuật", "mỹ thuật", "thiết kế", "hội hoạ", "hội họa"], groups: ["Nghệ thuật – Thiết kế"] },
+    { k: ["hát", "đàn", "nhạc", "múa"], groups: ["Nghệ thuật – Thiết kế"] },
+    { k: ["tiếng anh", "ngoại ngữ", "ielts", "toefl"], groups: ["Xã hội – Nhân văn", "Dịch vụ"] },
+    { k: ["văn", "viết", "báo", "mc", "dẫn chương trình", "hùng biện", "tranh biện"], groups: ["Xã hội – Nhân văn"] },
+    { k: ["sinh học", "hoá", "hóa", "thí nghiệm"], groups: ["Khoa học tự nhiên", "Sức khoẻ"] },
+    { k: ["toán"], groups: ["Kinh tế – Quản lý", "Công nghệ – Kỹ thuật"] },
+    { k: ["thể thao", "bóng", "võ", "điền kinh"], groups: ["An ninh – Quốc phòng"] },
+    { k: ["tình nguyện", "câu lạc bộ", "clb", "lớp trưởng", "bí thư"], groups: ["Giáo dục", "Kinh tế – Quản lý"] }
+  ];
+
   return { SUBJECTS, SUBJECT_ORDER, CHUYEN_DE, COMPULSORY, THCS, TO_HOP, HOLLAND, HOLLAND_SCALE,
-    PERSONALITY, PERSONALITY_DESC, GARDNER, LIKERT5, AGREE5, TPB, HOLLAND_SUBJ, GARDNER_SUBJ, CAREERS, SAMPLE_SCHOOLS };
+    PERSONALITY, PERSONALITY_DESC, GARDNER, LIKERT5, HOLLAND_SUBJ, GARDNER_SUBJ, CAREERS, SAMPLE_SCHOOLS,
+    SATISFACTION, SUBJECT_SAT, STRESS, PERIODS, TALENT_KEYS };
 })();

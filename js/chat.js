@@ -59,7 +59,7 @@
     const base = {
       0: ["Phải chọn mấy môn?", "Môn nào bắt buộc?", "Tổ hợp A00 gồm gì?"],
       1: ["Vì sao cần điểm lớp 9?", "Phải chọn mấy môn?"],
-      2: ["Holland là gì?", "TPB là gì?", "Trắc nghiệm có chính xác không?"],
+      2: ["Holland là gì?", "Tính cách 4 chiều là gì?", "Trắc nghiệm có chính xác không?"],
       3: ["Ngành Y cần học môn gì?", "Ngành CNTT cần môn gì?", "Ngành Luật cần môn gì?"],
       4: ["Nên chọn tổ hợp nào?", "Chuyên đề học tập là gì?", "Môn nào được thi tốt nghiệp?"],
       5: ["Nói chuyện với bố mẹ thế nào?", "Nên chọn tổ hợp nào?"],
@@ -77,11 +77,10 @@
 
   /* ---------- Gửi ---------- */
   async function send(text) {
-    add("user", text);
+    add("user", text); history.push({ role: "user", content: text });
     const t = norm(text);
-    // Nội dung khủng hoảng chỉ xử lý tại chỗ, không ghi vào lịch sử hay gửi máy chủ.
-    if (isCrisis(t)) { add("bot", crisisReply(), "alert"); return; }
-    history.push({ role: "user", content: text });
+    // An toàn luôn xử lý tại chỗ trước
+    if (isCrisis(t)) { say(crisisReply(), "alert"); return; }
     if (CFG.apiUrl) {
       const typing = add("bot", "Đang soạn câu trả lời…", "typing");
       try {
@@ -126,7 +125,7 @@
     if (/toi la (giao vien|thay|co giao)|la giao vien/.test(t)) return setRole("gv");
 
     if (has(t, ["ban quyen", "ai lam", "ai phat trien", "so huu", "tac gia", "cua ai"]))
-      return "Cổng thông tin tư vấn học sinh thuộc bản quyền của Dr. Duyen Nguyen (© 2026). All rights reserved.";
+      return "Cổng thông tin tư vấn học sinh thuộc bản quyền của Dr. Duyen Nguyen (© 2026). Bảo lưu mọi quyền.";
 
     if (/^(xin chao|chao|hello|hi|alo)\b/.test(t)) return `Chào ${w.you}! ${w.You} muốn bắt đầu tư vấn đầy đủ, làm trắc nghiệm, hay hỏi nhanh về quy định chọn môn?`;
 
@@ -158,8 +157,6 @@
 
     if (has(t, ["holland"]))
       return "Trắc nghiệm Holland chia sở thích nghề nghiệp thành 6 nhóm: R (thực tế), I (nghiên cứu), A (nghệ sĩ), S (xã hội), E (dám nghĩ dám làm), C (quy củ). 3 nhóm điểm cao nhất tạo thành mã Holland, dùng để gợi ý ngành phù hợp. Làm ở Bước 2, khoảng 15 phút.";
-    if (has(t, ["tpb", "hanh vi co ke hoach"]))
-      return "TPB (Thuyết hành vi có kế hoạch) đo 4 yếu tố với một tổ hợp cụ thể: Thái độ (mình thấy tổ hợp có lợi, thú vị?), Chuẩn chủ quan (người quan trọng có ủng hộ?), Nhận thức kiểm soát (mình có tự tin, đủ điều kiện?), và Ý định. Kết quả giúp nhận ra mâu thuẫn, ví dụ thích nhưng gia đình chưa ủng hộ. Bản demo dùng thang tạm thời.";
     if (has(t, ["mbti", "tinh cach"]))
       return "Phần tính cách 4 chiều là bản rút gọn tham khảo (không phải bộ MBTI® chính thức), giúp hiểu cách bạn nạp năng lượng, tiếp nhận thông tin, ra quyết định và tổ chức công việc. Không dùng để kết luận nghề.";
     if (has(t, ["gardner", "da tri tue", "tri thong minh"]))
@@ -191,9 +188,9 @@
       const sid = s.ui.step4School || s.profile.schoolId;
       const sch = APP.findSchool(sid);
       if (!sch) return `${Me} cần biết trường của ${w.you}. Hãy chọn trường ở Bước 1 hoặc Bước 4 (bản demo có trường minh hoạ, hoặc ${w.you} tự nhập danh sách tổ hợp của trường). Bản có AI sẽ tự tra cứu trên web.`;
-      const ranked = sch.combos.map(c => ({ c, a: APP.analyzeCombo(c.subjects, c.cd, sch) })).sort((x, y) => y.a.total - x.a.total).slice(0, 3);
+      const rec = APP.recommendForSchool(sch); const ranked = (rec.ok.length ? rec.ok : rec.blocked).slice(0, 3).map(x => ({ c: x.combo, a: x.a }));
       const hs = APP.hollandStats();
-      let r = `Dựa trên dữ liệu hiện có (${hs.done ? "Holland " + (hs.code || "các nhóm đồng điểm") : hs.answered ? "Holland chưa đủ câu hợp lệ" : "chưa làm Holland"}, ngành ưu tiên: ${APP.priorityCareers().map(c => c.name).join(", ")}), 3 phương án cao nhất tại ${sch.name}:\n`;
+      let r = `Dựa trên dữ liệu hiện có (${hs.answered ? "Holland " + hs.code : "chưa làm Holland"}, ngành ưu tiên: ${APP.priorityCareers().map(c => c.name).join(", ")}), 3 phương án cao nhất tại ${sch.name}:\n`;
       ranked.forEach((x, i) => { r += `${i + 1}. ${APP.comboLabel(x.c.subjects)} – ${x.a.total}/100, mở thêm ${x.a.nonTrivial.join(", ") || "–"}\n`; });
       return r + `Chi tiết và rủi ro từng phương án xem ở Bước 4. Quyết định cuối cùng là của ${w.you === "bạn" ? "bạn và gia đình" : "học sinh và gia đình"}.`;
     }
@@ -201,7 +198,7 @@
     if (has(t, ["quy trinh", "buoc", "bat dau"]))
       return "Quy trình 7 bước: (1) Thu thập dữ liệu nền → (2) Trắc nghiệm tâm lý – năng lực – sở thích → (3) Khám phá ngành nghề → (4) Gợi ý tổ hợp tại trường → (5) Trao đổi với giáo viên, cha mẹ → (6) Chốt và đăng ký → (7) Theo dõi, điều chỉnh. Bấm số bước ở cột bên trái để chuyển.";
 
-    return `${Me} chưa hiểu rõ câu hỏi. Trong bản demo, ${w.me} trả lời được các chủ đề: số môn phải chọn, môn bắt buộc, chuyên đề, đổi môn, thi tốt nghiệp, tổ hợp xét tuyển (VD: “A00 gồm gì?”), ngành nghề (VD: “Ngành Dược cần môn gì?”), Holland/TPB, và gợi ý tổ hợp. Khi tích hợp AI, chatbot sẽ trả lời linh hoạt hơn.`;
+    return `${Me} chưa hiểu rõ câu hỏi. Trong bản demo, ${w.me} trả lời được các chủ đề: số môn phải chọn, môn bắt buộc, chuyên đề, đổi môn, thi tốt nghiệp, tổ hợp xét tuyển (VD: “A00 gồm gì?”), ngành nghề (VD: “Ngành Dược cần môn gì?”), trắc nghiệm Holland, và gợi ý tổ hợp. Khi tích hợp AI, chatbot sẽ trả lời linh hoạt hơn.`;
   }
   function setRole(r) {
     APP.state().role = r;
