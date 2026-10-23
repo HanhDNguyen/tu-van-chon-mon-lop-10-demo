@@ -9,7 +9,8 @@
   const D = window.CTV_DATA, APP = window.CTV_APP, CFG = Object.assign({}, window.CTV_CONFIG || {});
   // apiUrl dạng "/chat" chỉ dùng được khi web được mở qua trạm trung gian (http/https).
   // Mở trực tiếp file index.html (file://) thì tự chuyển sang chế độ demo.
-  if (CFG.apiUrl && CFG.apiUrl.startsWith("/") && location.protocol === "file:") CFG.apiUrl = "";
+  // GitHub Pages (*.github.io) là web tĩnh, không có trạm trung gian nên cũng chạy chế độ demo.
+  if (CFG.apiUrl && CFG.apiUrl.startsWith("/") && (location.protocol === "file:" || /\.github\.io$/i.test(location.hostname))) CFG.apiUrl = "";
   const $ = s => document.querySelector(s);
   const fab = $("#chatFab"), panel = $("#chatPanel"), log = $("#chatLog"), form = $("#chatForm"), input = $("#chatInput"), chips = $("#chatChips");
   const history = [];

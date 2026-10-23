@@ -258,7 +258,7 @@ table.t th { color: var(--ink); font-size: .85rem; background: var(--ink-soft); 
 .checklist li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px dashed var(--line); }
 .checklist input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--ink); }
 .auto-flag { font-size: .78rem; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
-.auto-flag.y { background: var(--ok-soft); color: var(--ok); }
+.auto-flag.y { background: var(--ok-soft); color: #186B44; } /* đậm hơn --ok để đạt tương phản 4.5:1 trên nền nhạt */
 .auto-flag.n { background: var(--bad-soft); color: var(--bad); }
 
 .code-box { font-family: Consolas, "Courier New", monospace; font-size: .8rem; background: var(--paper); border: 1.5px dashed var(--line); border-radius: 8px; padding: 10px; word-break: break-all; max-height: 160px; overflow: auto; white-space: pre-wrap; }

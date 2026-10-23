@@ -65,7 +65,7 @@
     return data;
   }
   async function detectServer() {
-    if (!/^https?:/.test(location.protocol)) return;
+    if (!/^https?:/.test(location.protocol) || /\.github\.io$/i.test(location.hostname)) return; // GitHub Pages: web tĩnh, không có máy chủ
     try { SRV.info = await api("/api/info"); SRV.on = true; await refreshServerSchools(); } catch (e) { SRV.on = false; }
   }
   async function refreshServerSchools() { if (!SRV.on) return; try { const r = await api("/api/schools"); SRV.schools = (r.schools || []).map(s => Object.assign(s, { shared: true })); } catch (e) { /* bỏ qua */ } }
@@ -353,7 +353,7 @@
   function boardHTML(picked) {
     return `<div class="board" role="group" aria-label="9 môn học lựa chọn">${D.SUBJECT_ORDER.map(k => {
       const s = D.SUBJECTS[k], on = picked.includes(k), dis = !on && picked.length >= 4;
-      return `<button type="button" class="tile" style="--c:${s.color}" data-action="tile" data-k="${k}" aria-pressed="${on}" ${dis ? "disabled" : ""}>${esc(s.name)}<small>${s.examable ? "Được chọn thi TN" : "Không thi TN"}</small></button>`;
+      return `<button type="button" class="tile" style="--c:${s.color}" data-action="tile" data-k="${k}" data-fid="tile-${k}" aria-pressed="${on}" ${dis ? "disabled" : ""}>${esc(s.name)}<small>${s.examable ? "Được chọn thi TN" : "Không thi TN"}</small></button>`;
     }).join("")}</div>`;
   }
   function heroDoors(p) {
@@ -368,7 +368,7 @@
   /* ================= BƯỚC 1 ================= */
   function viewStep1() {
     const p = S.profile, st = strengthLists();
-    const sel = (path, opts) => `<select data-bind="${path}">${opts.map(o => `<option value="${esc(o)}" ${getPath(path) === o ? "selected" : ""}>${esc(o || "– Chọn –")}</option>`).join("")}</select>`;
+    const sel = (path, opts) => `<select id="${path.replace(/\./g, "-")}" data-bind="${path}">${opts.map(o => `<option value="${esc(o)}" ${getPath(path) === o ? "selected" : ""}>${esc(o || "– Chọn –")}</option>`).join("")}</select>`;
     return `<section class="sheet">
       ${stepHead(1, "Thu thập dữ liệu nền", T("Cho mình biết một chút về bạn. Chỉ cần tên gọi, không cần họ tên đầy đủ. Các câu hỏi về gia đình có thể bỏ qua.", "Nhập thông tin của học sinh. Chỉ cần tên gọi, không cần họ tên đầy đủ. Các câu hỏi về gia đình có thể bỏ qua."))}
       <fieldset><legend>Thông tin chung</legend>
@@ -395,16 +395,16 @@
         </div>
       </fieldset>
       <fieldset><legend>Sở thích môn học</legend>
-        <div class="field"><span class="label">${T("Môn lựa chọn bạn thích", "Môn lựa chọn học sinh thích")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="profile.liked" data-k="${k}" aria-pressed="${p.liked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
-        <div class="field" style="margin-top:12px"><span class="label">${T("Môn bạn không muốn học", "Môn học sinh không muốn học")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" aria-pressed="${p.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div>
+        <div class="field"><span class="label">${T("Môn lựa chọn bạn thích", "Môn lựa chọn học sinh thích")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="profile.liked" data-k="${k}" data-fid="liked-${k}" aria-pressed="${p.liked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
+        <div class="field" style="margin-top:12px"><span class="label">${T("Môn bạn không muốn học", "Môn học sinh không muốn học")}</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" data-fid="disliked-${k}" aria-pressed="${p.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div>
           <span class="hint">Tổ hợp có môn này sẽ không được gợi ý ở Bước 4.</span></div>
       </fieldset>
       <fieldset><legend>Điều kiện (không bắt buộc)</legend>
         <div class="grid-2">
-          <div class="field"><label>Khả năng học thêm ngoài giờ</label>${sel("profile.cond.extra", ["", "Thuận lợi", "Có thể, hạn chế", "Khó khăn", "Không muốn chia sẻ"])}</div>
-          <div class="field"><label>Thời gian tự học mỗi ngày</label>${sel("profile.cond.time", ["", "Dưới 1 giờ", "1–2 giờ", "Trên 2 giờ"])}</div>
-          <div class="field"><label>Có máy tính ở nhà</label>${sel("profile.cond.device", ["", "Có", "Không", "Dùng chung"])}</div>
-          <div class="field"><label>Điều kiện kinh tế gia đình</label>${sel("profile.cond.econ", ["", "Thuận lợi", "Bình thường", "Khó khăn", "Không muốn chia sẻ"])}</div>
+          <div class="field"><label for="profile-cond-extra">Khả năng học thêm ngoài giờ</label>${sel("profile.cond.extra", ["", "Thuận lợi", "Có thể, hạn chế", "Khó khăn", "Không muốn chia sẻ"])}</div>
+          <div class="field"><label for="profile-cond-time">Thời gian tự học mỗi ngày</label>${sel("profile.cond.time", ["", "Dưới 1 giờ", "1–2 giờ", "Trên 2 giờ"])}</div>
+          <div class="field"><label for="profile-cond-device">Có máy tính ở nhà</label>${sel("profile.cond.device", ["", "Có", "Không", "Dùng chung"])}</div>
+          <div class="field"><label for="profile-cond-econ">Điều kiện kinh tế gia đình</label>${sel("profile.cond.econ", ["", "Thuận lợi", "Bình thường", "Khó khăn", "Không muốn chia sẻ"])}</div>
         </div>
         <div class="field" style="margin-top:10px"><label for="f-health">Lưu ý sức khoẻ liên quan nghề nghiệp (nếu muốn chia sẻ)</label><input id="f-health" type="text" data-bind="profile.health" value="${esc(p.health)}" placeholder="VD: dị ứng hoá chất, mắt khó phân biệt màu"></div>
       </fieldset>
@@ -599,7 +599,7 @@
       </div>
       <fieldset style="margin-top:16px"><legend>Ràng buộc cá nhân</legend>
         <div class="field"><span class="label">Môn bắt buộc phải có (theo ngành mục tiêu)</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip" data-action="toggle-arr" data-path="constraints.must" data-k="${k}" aria-pressed="${S.constraints.must.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
-        <div class="field" style="margin-top:10px"><span class="label">Môn không muốn học (đồng bộ với Bước 1 – tổ hợp có môn này bị loại)</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" aria-pressed="${S.profile.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
+        <div class="field" style="margin-top:10px"><span class="label">Môn không muốn học (đồng bộ với Bước 1 – tổ hợp có môn này bị loại)</span><div class="chips">${D.SUBJECT_ORDER.map(k => `<button type="button" class="chip bad" data-action="toggle-arr" data-path="profile.disliked" data-k="${k}" data-fid="disliked-${k}" aria-pressed="${S.profile.disliked.includes(k)}">${esc(D.SUBJECTS[k].name)}</button>`).join("")}</div></div>
         <p class="small muted" style="margin-top:10px">Ngành đang ưu tiên: <b>${esc(pcs.map(c => c.name).join(", ") || "chưa có")}</b> ${Object.values(S.careerFb).includes("like") ? "" : "(tạm lấy 3 ngành phù hợp nhất – đánh dấu “Thích” ở Bước 3 để chính xác hơn)"}</p>
       </fieldset>
       ${school ? results : `<div class="callout info"><p>Chọn một trường, hoặc bấm “Thêm / cập nhật trường” để lấy danh sách tổ hợp từ website trường hoặc nhập tay.</p></div>`}
@@ -680,11 +680,15 @@
     const a = fc ? analyzeCombo(fc.subjects, fc.cd && fc.cd.length ? fc.cd : null, sch) : null;
     const auto = a ? a.v : null;
     const options = S.shortlist.map(k => { const [scId, ck] = k.split("|"); return { scId, ck }; });
+    // Dự phòng = tổ hợp mở ≥ 2 ngành mục tiêu, hoặc còn phương án khác trong danh sách cân nhắc; chưa rõ thì để người dùng tự đánh dấu.
+    const fitN = a ? a.careerRows.filter(r => r.strong.length).length : 0;
+    const hasBackup = fitN >= 2 || !!fc && options.some(o => o.ck !== fc.comboKey || o.scId !== fc.schoolId);
+    const careerAuto = !a ? null : !fitN ? false : hasBackup ? true : null;
     const items = [
       { k: "r1", t: "Đúng 4 môn lựa chọn, khác nhau, trong 9 môn (TT 13/2022)", auto: auto ? auto.r1 : null },
       { k: "r2", t: "3 cụm chuyên đề của 3 môn khác nhau, đúng theo tổ hợp của trường", auto: auto ? auto.r2 : null },
       { k: "r3", t: "Tổ hợp có trong danh sách trường công khai; đúng định hướng Công nghệ (công nghiệp/nông nghiệp) nếu có", auto: auto ? auto.r3 : null },
-      { k: "career", t: "Phù hợp ít nhất 1 ngành mục tiêu và có phương án dự phòng", auto: a ? a.careerRows.some(r => r.strong.length) : null },
+      { k: "career", t: "Phù hợp ít nhất 1 ngành mục tiêu và có phương án dự phòng", auto: careerAuto },
       { k: "parent", t: "Cha mẹ/người giám hộ đã biết và đồng ý" },
       { k: "deadline", t: "Biết thời hạn và cách nộp phiếu đăng ký của trường" },
       { k: "cv68", t: "Hiểu: giữ ổn định đến hết lớp 12; chỉ đổi vào cuối năm học, cần cam kết tự bổ sung kiến thức có xác nhận của cha mẹ và Hiệu trưởng đồng ý (CV 68)" }
@@ -699,7 +703,7 @@
       </div>
       <h3 style="margin-top:18px">Danh sách kiểm tra</h3>
       <ul class="checklist">${items.map(it => `<li>${it.auto == null ? `<input type="checkbox" id="ck-${it.k}" data-action="check" data-k="${it.k}" ${S.final.checks[it.k] ? "checked" : ""}>` : `<span aria-hidden="true" class="${it.auto ? "check" : "cross"}" style="width:20px;text-align:center">${it.auto ? "✓" : "✗"}</span>`}
-        <label for="ck-${it.k}">${esc(it.t)}${it.auto == null ? "" : `<span class="auto-flag ${it.auto ? "y" : "n"}">${it.auto ? "tự kiểm tra: đạt" : "tự kiểm tra: chưa đạt"}</span>`}</label></li>`).join("")}</ul>
+        ${it.auto == null ? `<label for="ck-${it.k}">${esc(it.t)}</label>` : `<span>${esc(it.t)}<span class="auto-flag ${it.auto ? "y" : "n"}">${it.auto ? "tự kiểm tra: đạt" : "tự kiểm tra: chưa đạt"}</span></span>`}</li>`).join("")}</ul>
       ${a && a.v.issues.length ? a.v.issues.map(t => `<div class="callout bad"><p>${esc(t)}</p></div>`).join("") : ""}
       ${a && a.disliked.length ? `<div class="callout warn"><p>Phương án có môn ${T("bạn", "học sinh")} không muốn học: ${esc(a.disliked.map(subjName).join(", "))}.</p></div>` : ""}
       <div class="row" style="margin-top:16px">
@@ -746,7 +750,7 @@
           <fieldset><legend>Mức căng thẳng trong học tập</legend>${scaleRadios("stress", D.STRESS)}</fieldset>
         </div>
         <div class="table-wrap"><table class="t"><thead><tr><th>Môn</th><th>Điểm TB (0–10)</th><th>Mức hài lòng với môn</th></tr></thead><tbody>
-          ${subs.map(s => `<tr><td>${esc(subjName(s))}</td><td><input name="score-${s}" type="number" min="0" max="10" step="0.1" style="max-width:110px"></td><td><select name="sat-${s}"><option value="">– Chọn –</option>${D.SUBJECT_SAT.map((t, i) => `<option value="${i + 1}">${i + 1} · ${esc(t.split(" – ")[0])}</option>`).join("")}</select></td></tr>`).join("")}
+          ${subs.map(s => `<tr><td>${esc(subjName(s))}</td><td><input name="score-${s}" aria-label="Điểm TB ${esc(subjName(s))}" type="number" min="0" max="10" step="0.1" style="max-width:110px"></td><td><select name="sat-${s}" aria-label="Mức hài lòng với môn ${esc(subjName(s))}"><option value="">– Chọn –</option>${D.SUBJECT_SAT.map((t, i) => `<option value="${i + 1}">${i + 1} · ${esc(t.split(" – ")[0])}</option>`).join("")}</select></td></tr>`).join("")}
         </tbody></table></div>
         <details class="small" style="margin-top:8px"><summary>Cách chấm mức hài lòng với từng môn</summary><ul>${D.SUBJECT_SAT.map((t, i) => `<li><b>${i + 1}</b> – ${esc(t)}</li>`).join("")}</ul></details>
         <label class="row small" style="gap:6px;margin-top:10px"><input type="checkbox" name="wantChange"> ${T("Mình đang muốn đổi môn lựa chọn", "Học sinh đang muốn đổi môn lựa chọn")}</label>
@@ -1084,6 +1088,11 @@
   });
   document.addEventListener("change", e => {
     const el = e.target.closest("[data-bind]"); if (!el) return;
+    if (el.type === "number" && (el.validity.rangeOverflow || el.validity.rangeUnderflow || el.validity.badInput)) {
+      el.value = ""; el.setAttribute("aria-invalid", "true");
+      toast(`Giá trị phải từ ${el.min} đến ${el.max}`); el.focus(); return;
+    }
+    el.removeAttribute("aria-invalid");
     setPath(el.dataset.bind, el.value); save();
     if (el.dataset.rerender) render(); else renderSteps();
   });
