@@ -2,7 +2,7 @@
 
 > Tài liệu bàn giao từ phiên làm việc với Claude (11–12/10/2026) để Hermes Agent trên máy Mac thực hiện tiếp các bước còn dở.
 > Đọc hết tài liệu trước khi chạy bất kỳ lệnh nào. Làm từng bước theo thứ tự, kiểm tra xong bước này mới sang bước sau, và báo kết quả cho chủ máy sau mỗi bước.
-> © 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+> © 2026 Dr. Duyen Nguyen. All rights reserved.
 
 ---
 
@@ -11,7 +11,7 @@
 | Mục | Nội dung |
 |---|---|
 | Dự án | Web demo **"Cổng thông tin tư vấn học sinh"**: hỗ trợ học sinh lớp 10 chọn 4 môn học lựa chọn theo quy trình 7 bước, có trợ lý hỏi đáp |
-| Bản quyền | © 2026 **Dr. Duyen Nguyen** (ghi tên một lần, dạng "© 2026 Dr. Duyen Nguyen – Bảo lưu mọi quyền.") |
+| Bản quyền | © 2026 **Dr. Duyen Nguyen** (ghi tên một lần, dạng "© 2026 Dr. Duyen Nguyen – All rights reserved.") |
 | Người vận hành | Chủ máy Mac đang chạy Hermes Agent 24/7. Bot Telegram cá nhân `@hermes_633yks4qhsgck3ur_bot` đang làm cầu nối email |
 | Tính chất | **Bản demo** để trình diễn chức năng; dữ liệu và trắc nghiệm dùng tạm, sẽ chuẩn hóa sau |
 | Màu chủ đạo | Đỏ đậm `#A51C24` + vàng `#F5B800` (theo tinh thần màu Đại học Bách khoa Hà Nội; không dùng logo hay tên trường) |

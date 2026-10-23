@@ -1,6 +1,6 @@
 # Quay về phiên bản cũ
 
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+© 2026 Dr. Duyen Nguyen. All rights reserved.
 
 Mỗi phiên bản ổn định được lưu thành một **nhánh** riêng trên GitHub, tên dạng `phien-ban/<số phiên bản>`. Nhánh `main` luôn là bản mới nhất (bản GitHub Pages đang chạy).
 Xem các nhánh: https://github.com/HanhDNguyen/tu-van-chon-mon-lop-10-demo/branches

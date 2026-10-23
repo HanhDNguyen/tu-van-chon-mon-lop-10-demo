@@ -1,6 +1,6 @@
 # Cổng thông tin tư vấn học sinh – Web demo chọn môn lớp 10
 
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+© 2026 Dr. Duyen Nguyen. All rights reserved.
 
 Bản **demo** để minh họa chức năng. Dữ liệu và bộ trắc nghiệm là bản dùng tạm, sẽ chuẩn hóa sau.
 

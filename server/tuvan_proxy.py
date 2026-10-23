@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Trạm trung gian (máy chủ nhỏ) cho web "Cổng thông tin tư vấn học sinh".
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+© 2026 Dr. Duyen Nguyen. All rights reserved.
 
 Chạy trên máy Mac. Chỉ dùng thư viện có sẵn của Python 3.
 

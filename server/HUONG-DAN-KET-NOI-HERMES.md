@@ -1,7 +1,7 @@
 # Hướng dẫn nối "Cổng thông tin tư vấn học sinh" với Hermes Agent
 ### Phương án đã chọn: Tailscale Funnel + trạm trung gian phục vụ luôn web (phương án A)
 
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+© 2026 Dr. Duyen Nguyen. All rights reserved.
 
 ## Sơ đồ
 

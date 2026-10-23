@@ -2,7 +2,7 @@
 # Cài trạm trung gian thành dịch vụ tự chạy (launchd) trên Mac:
 # tự khởi động khi đăng nhập, tự chạy lại nếu bị dừng.
 # Gỡ: bash cai-dat-tu-chay.sh go
-# © 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+# © 2026 Dr. Duyen Nguyen. All rights reserved.
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LABEL="vn.tuvan.proxy"
 PL="$HOME/Library/LaunchAgents/$LABEL.plist"

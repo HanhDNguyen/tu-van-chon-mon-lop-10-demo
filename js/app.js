@@ -1,6 +1,6 @@
 /* =========================================================
    Cổng thông tin tư vấn học sinh – ỨNG DỤNG DEMO (7 bước)
-   © 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+   © 2026 Dr. Duyen Nguyen. All rights reserved.
    ========================================================= */
 (function () {
   "use strict";

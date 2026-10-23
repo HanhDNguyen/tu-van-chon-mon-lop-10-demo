@@ -1,6 +1,6 @@
 # Quy ước nhập danh sách tổ hợp môn của trường
 
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền. Tài liệu nội bộ cho giáo viên/người quản trị – không hiển thị trên trang web.
+© 2026 Dr. Duyen Nguyen. All rights reserved. Tài liệu nội bộ cho giáo viên/người quản trị – không hiển thị trên trang web.
 
 Dùng cho ô **Nhập tổ hợp của trường THPT** ngay tại Bước 4 (có thêm nút chọn nhanh 4 môn + 3 cụm chuyên đề để tạo dòng), và ô danh sách trong hộp thoại **Thêm / cập nhật trường** (lấy từ website / dán thông báo, hoặc Khu vực giáo viên).
 

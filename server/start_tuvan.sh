@@ -1,6 +1,6 @@
 #!/bin/bash
 # Khởi động trạm trung gian "Cổng thông tin tư vấn học sinh" trên Mac.
-# © 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền.
+# © 2026 Dr. Duyen Nguyen. All rights reserved.
 # - Tự đọc API_SERVER_KEY từ ~/.hermes/profiles/tuvan/.env (không cần dán khóa)
 # - Đọc thêm cấu hình trong server/tuvan.env (PUBLIC_ORIGIN, TEACHER_PASSWORD, DATA_DIR, RATE_LIMIT, PROXY_PORT)
 set -e

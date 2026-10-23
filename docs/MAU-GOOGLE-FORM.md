@@ -1,6 +1,6 @@
 # Mẫu Google Form khảo sát theo dõi (Bước 7)
 
-© 2026 Dr. Duyen Nguyen. Bảo lưu mọi quyền. Bản demo – mẫu câu hỏi dùng tạm.
+© 2026 Dr. Duyen Nguyen. All rights reserved. Bản demo – mẫu câu hỏi dùng tạm.
 
 Web khớp kết quả theo **Mã học sinh** và nhận diện cột theo **tên câu hỏi**. Hãy giữ nguyên các cụm từ in đậm trong tiêu đề câu hỏi (có thể thêm chữ phía sau).
 
