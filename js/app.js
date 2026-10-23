@@ -1148,6 +1148,8 @@
       case "check": S.final.checks[ds.k] = b.checked; if (ds.k !== "talked") S.final.confirmed = false; save(); render(); break;
       case "confirm-final": S.final.confirmed = true; save(); render(); toast("Đã xác nhận phương án chính thức"); break;
       case "print": window.print(); break;
+      case "open-diagram": { const d = $("#diagramDialog"), f = $("#diagramFrame"); if (!f.getAttribute("src")) f.setAttribute("src", "so-do.html"); if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); break; }
+      case "close-diagram": { const d = $("#diagramDialog"); if (d.close) d.close(); else d.removeAttribute("open"); break; }
       case "copy-summary": copyText(summaryText()); break;
       case "add-school": openSchoolDialog(null); break;
       case "s4-pick": { const on = b.getAttribute("aria-pressed") === "true"; if (!on && b.parentElement.querySelectorAll("[aria-pressed=true]").length >= +ds.max) { s4Msg(`Tối đa ${ds.max} – bỏ chọn một ô trước.`, true); break; } b.setAttribute("aria-pressed", String(!on)); break; }

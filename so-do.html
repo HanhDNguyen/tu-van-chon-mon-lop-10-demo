@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 3'%3E%3Crect width='3' height='3' fill='%23a31d24'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23f2b705'/%3E%3C/svg%3E">
+<title>Sơ đồ triển khai Cổng tư vấn</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: một cột đọc, mỗi hình chiếm trọn bề ngang để trình chiếu; màu và phông lấy từ chính cổng tư vấn */
+:root {
+  --bg: #FAF7F7; --band: #F2ECED; --card: #FFFFFF; --fg: #1F2233; --muted: #5B6078; --line: #D3CDD6;
+  --ink: #A51C24; --ink-soft: #FBECEC; --gold: #F5B800; --gold-soft: #FFF4CF; --gold-deep: #7A5700;
+  --font: "Be Vietnam Pro", "Segoe UI", Roboto, Arial, sans-serif;
+  --hand: "Patrick Hand", "Comic Sans MS", cursive;
+}
+
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: grid; gap: 10px; margin-bottom: 28px; }
+.eyebrow { font-family: var(--hand); color: var(--ink); font-size: 1.25rem; }
+h1 { margin: 0; font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.2; text-wrap: balance; }
+h2 { margin: 0 0 6px; font-size: 1.45rem; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 68ch; }
+nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+nav a { color: var(--ink); text-decoration: none; border: 1.5px solid var(--ink); border-radius: 999px; padding: 4px 14px; font-weight: 600; font-size: .92rem; }
+nav a:hover, nav a:focus-visible { background: var(--ink-soft); outline: none; }
+section { margin-top: 40px; display: grid; gap: 12px; }
+section > p { margin: 0; max-width: 72ch; }
+figure { margin: 0; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; height: auto; min-width: 760px; color: var(--fg); font-family: var(--font); }
+figcaption { color: var(--muted); font-size: .92rem; max-width: 80ch; }
+
+/* SVG – mọi màu lấy từ token */
+.band { fill: var(--band); }
+.box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.box-ink { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+.chip { fill: var(--band); stroke: var(--line); }
+.store { fill: var(--gold-soft); stroke: var(--gold); stroke-width: 1.5; }
+.input { fill: var(--gold-soft); stroke: var(--gold); stroke-width: 1.2; }
+.step { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+.formula { fill: var(--ink-soft); stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.t { fill: var(--fg); font-size: 13px; }
+.ts { fill: var(--fg); font-size: 12px; }
+.tm { fill: var(--muted); font-size: 12px; }
+.th { fill: var(--fg); font-size: 14.5px; font-weight: 700; }
+.tk { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.tg { fill: var(--gold-deep); font-size: 12px; font-weight: 600; }
+.lab { fill: var(--ink); font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+.edge { stroke: currentColor; stroke-width: 1.6; fill: none; }
+.edge-ink { stroke: var(--ink); stroke-width: 1.8; fill: none; }
+.edge-off { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+.mk { fill: currentColor; }
+.mk-ink { fill: var(--ink); }
+
+.files { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.file { background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.file > code { color: var(--ink); font-weight: 700; font-size: .95rem; }
+.file p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+.note { border-left: 4px solid var(--gold); background: var(--gold-soft); padding: 10px 14px; border-radius: 6px; max-width: 80ch; }
+footer { margin-top: 44px; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Cổng thông tin tư vấn học sinh · v2.0</span>
+    <h1>Sơ đồ triển khai</h1>
+    <p class="lede">Hệ thống chạy được theo hai cách: bản demo tĩnh trên GitHub Pages, hoặc qua trạm trung gian trên máy Mac khi cần trợ lý AI và dữ liệu dùng chung. Bên trong, học sinh đi qua 7 bước, mỗi bước tạo ra một sản phẩm (H1–H7).</p>
+    <nav aria-label="Các phần">
+      <a href="#kien-truc">Kiến trúc triển khai</a>
+      <a href="#quy-trinh">Luồng dữ liệu 7 bước</a>
+      <a href="#ma-nguon">Thành phần mã nguồn</a>
+    </nav>
+  </header>
+
+  <section id="kien-truc">
+    <h2>1. Kiến trúc triển khai</h2>
+    <p>Cả hai cách dùng chung một bộ file web. Khác biệt duy nhất là có hay không trạm trung gian nằm giữa trình duyệt và trợ lý AI.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 560" role="img" aria-label="Hai cách triển khai. A, GitHub Pages chỉ trả file tĩnh, dữ liệu lưu trên trình duyệt, trợ lý trả lời theo bộ câu hỏi có sẵn. B, trình duyệt đi qua Tailscale Funnel tới trạm tuvan_proxy.py trên Mac; trạm nối tới Hermes Agent cho trợ lý AI và lưu trường, hồ sơ dùng chung.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+          <marker id="a1i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ink"/></marker>
+        </defs>
+
+        <rect x="10" y="10" width="980" height="250" rx="14" class="band"/>
+        <text x="30" y="38" class="lab">A · GITHUB PAGES — BẢN DEMO ĐANG CHẠY</text>
+
+        <rect x="40" y="56" width="330" height="184" rx="10" class="box"/>
+        <text x="56" y="80" class="th">Trình duyệt của người dùng</text>
+        <rect x="56" y="92" width="298" height="38" rx="7" class="chip"/>
+        <text x="68" y="116" class="ts">app.js — 7 bước, chấm điểm, gợi ý</text>
+        <rect x="56" y="138" width="298" height="38" rx="7" class="chip"/>
+        <text x="68" y="162" class="ts">chat.js — trợ lý theo bộ câu hỏi có sẵn</text>
+        <rect x="56" y="184" width="298" height="42" rx="7" class="store"/>
+        <text x="68" y="210" class="tg">localStorage: hồ sơ · trường · kho hồ sơ</text>
+
+        <rect x="650" y="96" width="310" height="104" rx="10" class="box"/>
+        <text x="666" y="124" class="th">GitHub Pages</text>
+        <text x="666" y="148" class="tm">hanhdnguyen.github.io/tu-van-…</text>
+        <text x="666" y="170" class="tm">chỉ trả về file tĩnh, không chạy mã</text>
+
+        <line x1="648" y1="140" x2="374" y2="140" class="edge" marker-end="url(#a1)"/>
+        <text x="511" y="130" text-anchor="middle" class="t">tải HTML · CSS · JS</text>
+        <line x1="374" y1="172" x2="648" y2="172" class="edge-off"/>
+        <text x="511" y="194" text-anchor="middle" class="tm">không gọi /chat, /api (đã tắt trên github.io)</text>
+
+        <rect x="10" y="280" width="980" height="270" rx="14" class="band"/>
+        <text x="30" y="308" class="lab">B · QUA MÁY CHỦ TRÊN MAC — KHI BẬT TRẠM TRUNG GIAN</text>
+
+        <rect x="40" y="326" width="232" height="200" rx="10" class="box"/>
+        <text x="56" y="350" class="th">Trình duyệt</text>
+        <rect x="56" y="362" width="200" height="36" rx="7" class="chip"/>
+        <text x="68" y="385" class="ts">app.js · chat.js</text>
+        <rect x="56" y="406" width="200" height="36" rx="7" class="store"/>
+        <text x="68" y="429" class="tg">localStorage (bản nháp)</text>
+        <rect x="56" y="450" width="200" height="60" rx="7" class="chip"/>
+        <text x="68" y="474" class="ts">Giáo viên đăng nhập</text>
+        <text x="68" y="494" class="tm">→ token 12 giờ</text>
+
+        <rect x="312" y="376" width="152" height="100" rx="10" class="box"/>
+        <text x="328" y="402" class="th">Tailscale Funnel</text>
+        <text x="328" y="425" class="tm">https://…ts.net</text>
+        <text x="328" y="447" class="tm">cổng 443 → 8787</text>
+
+        <rect x="504" y="346" width="222" height="160" rx="10" class="box-ink"/>
+        <text x="520" y="372" class="tk">tuvan_proxy.py</text>
+        <text x="520" y="393" class="tm">trạm trung gian · :8787</text>
+        <text x="520" y="419" class="ts">• phục vụ file web</text>
+        <text x="520" y="439" class="ts">• POST /chat</text>
+        <text x="520" y="459" class="ts">• /api: trường, hồ sơ, đăng nhập</text>
+        <text x="520" y="479" class="ts">• tối đa 30 lượt hỏi/10 phút/IP</text>
+
+        <rect x="772" y="316" width="198" height="98" rx="10" class="box"/>
+        <text x="788" y="342" class="th">Hermes Agent</text>
+        <text x="788" y="365" class="tm">profile tuvan · :8642</text>
+        <text x="788" y="387" class="tm">chỉ được tìm kiếm web</text>
+
+        <rect x="772" y="432" width="198" height="86" rx="10" class="store"/>
+        <text x="788" y="458" class="tg">~/web-demo-data</text>
+        <text x="788" y="480" class="ts">schools.json</text>
+        <text x="788" y="500" class="ts">profiles/&lt;mã HS&gt;.json</text>
+
+        <line x1="274" y1="426" x2="310" y2="426" class="edge" marker-end="url(#a1)"/>
+        <text x="292" y="416" text-anchor="middle" class="tm">HTTPS</text>
+        <line x1="466" y1="426" x2="502" y2="426" class="edge" marker-end="url(#a1)"/>
+        <line x1="728" y1="365" x2="770" y2="365" class="edge-ink" marker-start="url(#a1i)" marker-end="url(#a1i)"/>
+        <text x="749" y="355" text-anchor="middle" class="tk" style="font-size:11px">/chat</text>
+        <line x1="728" y1="475" x2="770" y2="475" class="edge-ink" marker-start="url(#a1i)" marker-end="url(#a1i)"/>
+        <text x="749" y="465" text-anchor="middle" class="tk" style="font-size:11px">đọc/ghi</text>
+      </svg>
+      </div>
+      <figcaption>Ở cách A, mọi thứ nằm trong trình duyệt: hồ sơ chỉ lưu trên máy đang dùng, còn trợ lý trả lời theo bộ câu hỏi có sẵn. Cách B thêm trạm trung gian trên Mac. Trạm giữ khoá API, chuyển câu hỏi tới profile Hermes riêng cho tư vấn (tách khỏi bot Telegram và email cá nhân), và lưu trường, hồ sơ dùng chung cho giáo viên.</figcaption>
+    </figure>
+  </section>
+
+  <section id="quy-trinh">
+    <h2>2. Luồng dữ liệu qua 7 bước</h2>
+    <p>Dữ liệu học sinh nhập vào (ô vàng) đi qua từng bước. Hai chỗ chấm điểm là Bước 3 và Bước 4. Kết quả theo dõi ở Bước 7 có thể đưa học sinh quay lại cân nhắc tổ hợp.</p>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 450" role="img" aria-label="Bảy bước nối tiếp từ dữ liệu nền tới theo dõi, mỗi bước tạo sản phẩm H1 đến H7. Đầu vào: điểm lớp 9 và sở thích vào Bước 1, ba bài trắc nghiệm vào Bước 2, danh sách tổ hợp của trường vào Bước 4, kết quả Google Form vào Bước 7. Bước 3 chấm điểm ngành, Bước 4 chấm điểm tổ hợp; cảnh báo ở Bước 7 dẫn về Bước 4.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+          <marker id="a2i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-ink"/></marker>
+        </defs>
+
+        <rect x="20" y="16" width="120" height="72" rx="8" class="input"/>
+        <text x="30" y="38" class="tg">Điểm lớp 9</text>
+        <text x="30" y="56" class="tg">Môn thích/không</text>
+        <text x="30" y="74" class="tg">Nguyện vọng</text>
+        <rect x="160" y="16" width="120" height="72" rx="8" class="input"/>
+        <text x="170" y="38" class="tg">Holland 54 câu</text>
+        <text x="170" y="56" class="tg">Tính cách 16 câu</text>
+        <text x="170" y="74" class="tg">Gardner 24 câu</text>
+        <rect x="440" y="16" width="120" height="72" rx="8" class="input"/>
+        <text x="450" y="38" class="tg">Tổ hợp của trường</text>
+        <text x="450" y="56" class="tg">nhập tay, dán</text>
+        <text x="450" y="74" class="tg">thông báo, link</text>
+        <rect x="860" y="16" width="120" height="72" rx="8" class="input"/>
+        <text x="870" y="38" class="tg">Google Form</text>
+        <text x="870" y="56" class="tg">.csv / .xlsx</text>
+        <text x="870" y="74" class="tg">khớp Mã HS</text>
+        <line x1="80" y1="90" x2="80" y2="126" class="edge" marker-end="url(#a2)"/>
+        <line x1="220" y1="90" x2="220" y2="126" class="edge" marker-end="url(#a2)"/>
+        <line x1="500" y1="90" x2="500" y2="126" class="edge" marker-end="url(#a2)"/>
+        <line x1="920" y1="90" x2="920" y2="126" class="edge" marker-end="url(#a2)"/>
+
+        <rect x="20" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="32" y="152" class="tm">BƯỚC 1</text><text x="32" y="174" class="th">Dữ liệu nền</text><text x="32" y="214" class="tk">→ H1 Hồ sơ</text>
+        <rect x="160" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="172" y="152" class="tm">BƯỚC 2</text><text x="172" y="174" class="th">Trắc nghiệm</text><text x="172" y="192" class="ts">tâm lý – năng lực</text><text x="172" y="214" class="tk">→ H2 Báo cáo</text>
+        <rect x="300" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="312" y="152" class="tm">BƯỚC 3</text><text x="312" y="174" class="th">Nghề nghiệp</text><text x="312" y="192" class="ts">nhóm ngành hợp</text><text x="312" y="214" class="tk">→ H3 Ngành</text>
+        <rect x="440" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="452" y="152" class="tm">BƯỚC 4</text><text x="452" y="174" class="th">Tổ hợp</text><text x="452" y="192" class="ts">tại trường</text><text x="452" y="214" class="tk">→ H4 Phương án</text>
+        <rect x="580" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="592" y="152" class="tm">BƯỚC 5</text><text x="592" y="174" class="th">Tư vấn</text><text x="592" y="192" class="ts">GV – cha mẹ – HS</text><text x="592" y="214" class="tk">→ H5 Phiếu</text>
+        <rect x="720" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="732" y="152" class="tm">BƯỚC 6</text><text x="732" y="174" class="th">Chốt</text><text x="732" y="192" class="ts">nguyện vọng</text><text x="732" y="214" class="tk">→ H6 Xác nhận</text>
+        <rect x="860" y="130" width="120" height="96" rx="10" class="step"/>
+        <text x="872" y="152" class="tm">BƯỚC 7</text><text x="872" y="174" class="th">Theo dõi</text><text x="872" y="192" class="ts">điều chỉnh</text><text x="872" y="214" class="tk">→ H7 Cảnh báo</text>
+
+        <line x1="142" y1="178" x2="158" y2="178" class="edge" marker-end="url(#a2)"/>
+        <line x1="282" y1="178" x2="298" y2="178" class="edge" marker-end="url(#a2)"/>
+        <line x1="422" y1="178" x2="438" y2="178" class="edge" marker-end="url(#a2)"/>
+        <line x1="562" y1="178" x2="578" y2="178" class="edge" marker-end="url(#a2)"/>
+        <line x1="702" y1="178" x2="718" y2="178" class="edge" marker-end="url(#a2)"/>
+        <line x1="842" y1="178" x2="858" y2="178" class="edge" marker-end="url(#a2)"/>
+
+        <path d="M920,228 V258 H540 V230" class="edge-ink" marker-end="url(#a2i)"/>
+        <text x="740" y="250" text-anchor="middle" class="tk" style="font-size:12px">cảnh báo sớm → cân nhắc đổi môn cuối năm (CV 68)</text>
+
+        <line x1="360" y1="228" x2="360" y2="286" class="edge" marker-end="url(#a2)"/>
+        <rect x="140" y="290" width="282" height="146" rx="10" class="formula"/>
+        <text x="152" y="314" class="tk">Điểm phù hợp ngành (0–100)</text>
+        <text x="152" y="337" class="ts">Holland 35 · Gardner 15 · Điểm lớp 9 25</text>
+        <text x="152" y="357" class="ts">+ môn thích 10 · nguyện vọng 10</text>
+        <text x="152" y="377" class="ts">+ gia đình 5 · năng khiếu 5</text>
+        <text x="152" y="397" class="ts">− môn không muốn học 5 hoặc 15</text>
+        <text x="152" y="423" class="tm">Nhóm hợp = nhóm của 6 ngành cao nhất</text>
+
+        <line x1="480" y1="228" x2="480" y2="286" class="edge" marker-end="url(#a2)"/>
+        <rect x="440" y="290" width="282" height="146" rx="10" class="formula"/>
+        <text x="452" y="314" class="tk">Điểm phương án tổ hợp (0–100)</text>
+        <text x="452" y="337" class="ts">Phù hợp ngành 40 · Năng lực 30</text>
+        <text x="452" y="357" class="ts">Sở thích 20 · Linh hoạt 10</text>
+        <text x="452" y="377" class="ts">Chỉ dùng tổ hợp trường công bố</text>
+        <text x="452" y="397" class="ts">Loại tổ hợp có môn không muốn học</text>
+        <text x="452" y="423" class="tm">Kiểm tra: 4 môn · 3 cụm chuyên đề</text>
+      </svg>
+      </div>
+      <figcaption>Mỗi bước đọc dữ liệu của các bước trước, nên khi học sinh quay lại sửa thì kết quả được tính lại ngay. Mọi gợi ý đều có bảng "Vì sao gợi ý" ghi điểm từng yếu tố, để giáo viên và cha mẹ tự kiểm tra.</figcaption>
+    </figure>
+  </section>
+
+  <section id="ma-nguon">
+    <h2>3. Thành phần mã nguồn</h2>
+    <p>Web không cần cài đặt hay build. Trình duyệt nạp lần lượt bốn file script; file sau dùng dữ liệu của file trước.</p>
+    <div class="files">
+      <div class="file"><code>js/config.js</code><p>Địa chỉ trợ lý AI (/chat), thời gian chờ, bot Telegram.</p></div>
+      <div class="file"><code>js/data.js</code><p>9 môn lựa chọn, tổ hợp xét tuyển, 3 bộ trắc nghiệm, 36 ngành, trường minh hoạ.</p></div>
+      <div class="file"><code>js/app.js</code><p>Giao diện 7 bước, chấm điểm, kiểm tra hợp lệ theo TT 13/2022, lưu hồ sơ, khu vực giáo viên.</p></div>
+      <div class="file"><code>js/chat.js</code><p>Trợ lý tư vấn: gọi máy chủ AI nếu có, không thì trả lời theo bộ câu hỏi có sẵn; phản hồi an toàn khi có dấu hiệu khủng hoảng.</p></div>
+      <div class="file"><code>server/tuvan_proxy.py</code><p>Trạm trung gian viết bằng Python, không cần thư viện ngoài. Chỉ dùng ở cách B.</p></div>
+      <div class="file"><code>server/SOUL.md</code><p>Vai trò và giới hạn của profile Hermes "tuvan".</p></div>
+    </div>
+    <p class="note">Nếu trạm trung gian hoặc Hermes không trả lời, web tự chuyển về cách A: trợ lý trả lời theo bộ câu hỏi có sẵn, dữ liệu lưu trên trình duyệt. Buổi trình diễn vẫn chạy được khi mất kết nối.</p>
+  </section>
+
+  <footer>© 2026 Dr. Duyen Nguyen. All rights reserved. · <a href="index.html" target="_top" style="color:inherit">Về trang demo</a></footer>
+</div>
+</body>
+</html>

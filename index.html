@@ -75,6 +75,19 @@
     </form>
   </section>
 
+  <!-- Sơ đồ triển khai (để trình diễn song song với demo) -->
+  <button class="diagram-fab" type="button" data-action="open-diagram" aria-label="Xem sơ đồ triển khai" title="Sơ đồ triển khai">
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="1.5" y="2" width="6" height="5" rx="1.2"/><rect x="12.5" y="2" width="6" height="5" rx="1.2"/><rect x="7" y="13" width="6" height="5" rx="1.2"/><path d="M4.5 7v3h11V7M10 10v3"/></svg>
+  </button>
+  <dialog id="diagramDialog" class="diagram-dialog" aria-label="Sơ đồ triển khai">
+    <div class="diagram-head">
+      <strong>Sơ đồ triển khai</strong>
+      <a href="so-do.html" target="_blank" rel="noopener">Mở trong tab mới</a>
+      <button class="icon-btn" type="button" data-action="close-diagram" aria-label="Đóng sơ đồ">×</button>
+    </div>
+    <iframe id="diagramFrame" title="Sơ đồ triển khai"></iframe>
+  </dialog>
+
   <!-- Hộp thoại dùng chung -->
   <dialog id="dialog" class="dialog">
     <form method="dialog" class="dialog-inner" id="dialogInner"></form>

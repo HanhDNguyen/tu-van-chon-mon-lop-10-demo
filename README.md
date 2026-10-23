@@ -37,6 +37,7 @@ Mẹo khi thử: ở mỗi bài trắc nghiệm có nút **“Điền ngẫu nhi
 ```
 web-demo/
 ├─ index.html        Khung trang
+├─ so-do.html        Sơ đồ triển khai (mở bằng nút nhỏ góc dưới trái, hoặc mở riêng trong tab mới)
 ├─ css/style.css     Giao diện
 ├─ js/config.js      Cấu hình trợ lý tư vấn (máy chủ AI, bot Telegram)
 ├─ js/data.js        Dữ liệu: môn học, tổ hợp, trắc nghiệm, ngành nghề, trường minh họa
