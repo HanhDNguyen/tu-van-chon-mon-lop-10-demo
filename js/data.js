@@ -84,53 +84,196 @@ window.CTV_DATA = (function () {
   ];
   const HOLLAND_SCALE = ["Chưa bao giờ đúng", "Đúng vài trường hợp", "Đúng khoảng ½", "Đúng đa số", "Luôn đúng"];
 
-  /* ---------- Xu hướng tính cách 4 chiều (không phải MBTI chính thức) ---------- */
-  const PERSONALITY = [
-    { dim: "EI", a: "E", b: "I", label: "Nguồn năng lượng", items: [
-      ["Sau một ngày mệt, mình muốn gặp bạn bè", "Sau một ngày mệt, mình muốn ở một mình yên tĩnh"],
-      ["Mình thường vừa nói vừa nghĩ", "Mình nghĩ kỹ rồi mới nói"],
-      ["Mình thích làm việc nhóm đông", "Mình thích làm một mình hoặc nhóm nhỏ"],
-      ["Mình dễ bắt chuyện với người lạ", "Mình cần thời gian để cởi mở"]] },
-    { dim: "SN", a: "S", b: "N", label: "Cách tiếp nhận thông tin", items: [
-      ["Mình chú ý chi tiết, sự kiện cụ thể", "Mình chú ý ý tưởng, bức tranh tổng thể"],
-      ["Mình thích làm theo cách đã được chứng minh", "Mình thích thử cách mới"],
-      ["Mình tin vào kinh nghiệm thực tế", "Mình tin vào trực giác, linh cảm"],
-      ["Mình thích bài học có ví dụ thực tế rõ ràng", "Mình thích bài học về lý thuyết, khả năng tương lai"]] },
-    { dim: "TF", a: "T", b: "F", label: "Cách ra quyết định", items: [
-      ["Khi quyết định, mình ưu tiên lý lẽ, logic", "Khi quyết định, mình ưu tiên cảm xúc, giá trị của mọi người"],
-      ["Mình góp ý thẳng thắn", "Mình góp ý tế nhị để không làm ai buồn"],
-      ["Công bằng là áp dụng quy tắc như nhau", "Công bằng là xét hoàn cảnh từng người"],
-      ["Mình bị thuyết phục bởi số liệu, bằng chứng", "Mình bị thuyết phục bởi câu chuyện, sự đồng cảm"]] },
-    { dim: "JP", a: "J", b: "P", label: "Cách tổ chức cuộc sống", items: [
-      ["Mình thích lập kế hoạch trước", "Mình thích linh hoạt, tùy tình huống"],
-      ["Mình làm bài sớm trước hạn", "Mình thường làm gần sát hạn"],
-      ["Bàn học của mình thường gọn gàng", "Bàn học của mình \"lộn xộn có trật tự\""],
-      ["Mình thích quyết định nhanh để xong việc", "Mình thích để ngỏ thêm lựa chọn"]] }
+  /* ---------- Trắc nghiệm nhân cách EYSENCK (59 câu, theo tài liệu “2. TN NHÂN CÁCH EYSENCK”) ---------- */
+  const EYSENCK = [
+    "Bạn có thường xuyên bị lôi cuốn bởi những cảm tưởng, những ấn tượng mới mẻ hoặc đi tìm nguồn cảm xúc mạnh mẽ để giải buồn hoặc làm cho mình phấn chấn không?",
+    "Bạn có thích luôn luôn có mặt ở trong nhóm, trong hội của mình không?",
+    "Có đúng là bạn thích trò chuyện đến mức là không bao giờ bỏ lỡ cơ hội để được nói chuyện, kể cả với người không quen biết không?",
+    "Bạn có muốn trước khi làm việc gì cũng phải cân nhắc, suy nghĩ, không vội vàng không?",
+    "Bạn có thích làm những công việc đòi hỏi sự chú ý thường xuyên không?",
+    "Bạn có thường xuyên cần có người ý hợp tâm đồng để động viên, an ủi không?",
+    "Có đúng bạn là người đôi khi rất nhiệt tình trong công việc nhưng cũng có lúc hoàn toàn chán chường, uể oải không?",
+    "Có nỗi đau nào làm cho bạn lo lắng không?",
+    "Tâm trạng của bạn có thường hay thay đổi, lúc vui, lúc buồn không?",
+    "Có bao giờ bạn run sợ không?",
+    "Đôi lúc, bạn cũng nổi nóng, không kiềm chế được, phải không?",
+    "Có khi nào bạn nói về những điều mà bạn không am hiểu không?",
+    "Bạn là người vô tư, không bận tâm đến điều gì, phải không?",
+    "Có phải lúc ai đó tăng dần quát tháo với bạn thì bạn cũng quát tháo lại không?",
+    "Bạn có cảm thấy thật bất hạnh nếu trong thời gian dài không tiếp xúc rộng rãi với mọi người không?",
+    "Bạn thích đọc sách hơn là trò chuyện với người khác, phải không?",
+    "Bạn có cảm thấy khó chịu khi sống trong một tập thể mà mọi người hay giễu cợt nhau không?",
+    "Bạn cảm thấy rất khó khăn khi phải từ bỏ những ý định của mình hoặc từ chối người khác ngay cả khi hoàn cảnh bắt phải như thế không?",
+    "Bạn thường day dứt mỗi khi gặp sai lầm, phải không?",
+    "Bạn có cho mình là người dễ xúc động, dễ phản ứng không?",
+    "Bạn có dễ phật ý không?",
+    "Bạn có hay bực tức không?",
+    "Có những ý nghĩ mà bạn giữ kín, không cho người khác biết, phải không?",
+    "Khi đã hứa làm việc gì, bất kể lời hứa đó có thuận lợi cho mình hay không, bạn vẫn luôn luôn giữ lời hứa, phải không?",
+    "Bạn có hay nói và hành động một cách bột phát vội vàng, không kịp suy nghĩ không?",
+    "Bạn có khả năng làm chủ được tình cảm của mình và hoàn toàn vui vẻ trong các buổi hội họp, phải không?",
+    "Bạn có cho mình là người hoàn toàn tự tin không?",
+    "Bạn có cho rằng chỉ cần ít bạn nhưng phải là những bạn thân không?",
+    "Bạn đi đứng ung dung, thong thả, phải không?",
+    "Có khi nào bạn thấy mình là người bất hạnh một cách vô duyên cớ không?",
+    "Bạn có cho mình là người nhạy cảm và dễ bị kích động không?",
+    "Bạn có hay phật ý khi người khác chỉ ra những lỗi lầm trong công tác, trong cuộc sống riêng tư của bạn không?",
+    "Bạn có hay mơ ước không?",
+    "Bạn hay có những cơn ác mộng không?",
+    "Đôi khi bạn cũng thêm thắt câu chuyện cho sinh động, phải không?",
+    "Tất cả thói quen của bạn đều tốt và hợp với mong muốn của bạn, phải không?",
+    "Bạn có cho mình là người không hề lúng túng, không phải mất công tìm kiếm cũng luôn đưa ra lời giải đáp khi phải đánh giá, nhận xét một vấn đề nào đó và sẵn sàng làm tất cả để tranh luận đến cùng không?",
+    "Người ta cho bạn là người hoạt bát, vui vẻ, phải không?",
+    "Bạn có dễ dàng làm cho nhóm bạn bè của bạn đang buồn chán, tẻ nhạt thành sôi nổi, vui vẻ không?",
+    "Ở chỗ đông người, bạn thường im lặng, phải không?",
+    "Bạn có cho rằng khó có thể hài lòng trong một buổi gặp mặt liên hoan không?",
+    "Bạn có thấy rụt rè, e thẹn khi muốn bắt chuyện với một người khác giới dễ mến nhưng chưa quen biết không?",
+    "Sau khi làm xong một việc, bạn có cho rằng mình có thể làm việc đó tốt hơn không?",
+    "Bạn có lo lắng về sức khoẻ bản thân không?",
+    "Bạn có hay bị mất ngủ vì những ý nghĩ lộn xộn trong đầu không?",
+    "Sự cảm nhận rằng mình thấp kém hơn người khác có làm bạn khó chịu không?",
+    "Có bao giờ bạn đến nơi hẹn hoặc nơi làm hay đi học muộn giờ không?",
+    "Nếu như không có người kiểm tra khi đi tàu xe, bạn có mua vé không?",
+    "Bạn có hay hành động một cách bồng bột, nông nổi không?",
+    "Bạn có thích làm những công việc hoàn toàn gấp gáp không?",
+    "Bạn có thích được người khác cho mình là quan trọng không?",
+    "Khi muốn biết một điều gì, bạn thường tự tìm trong sách vở, internet chứ không hỏi người khác, phải không?",
+    "Bạn có thích trêu đùa người khác không?",
+    "Bạn có hay ân hận về những lời bạn đã nói, về những việc bạn đã làm mà lẽ ra không nên nói, không nên làm như vậy không?",
+    "Trước những sự việc có hoặc không thể xảy ra, bạn có hồi hộp không?",
+    "Đôi lúc bạn tự cảm thấy mình thật sự lo lắng một điều vô lý nào đó mà không lý giải nổi, phải không?",
+    "Có bao giờ bạn hồi hộp trước một sự kiện nào đó không?",
+    "Bạn có bị mất ngủ không?",
+    "Trong số những người quen, có người bạn không ưa họ một cách công khai, phải không?"
   ];
-  const PERSONALITY_DESC = {
-    E: "hướng ngoại – nạp năng lượng khi tương tác, hợp làm việc nhóm",
-    I: "hướng nội – tập trung sâu, làm việc độc lập tốt",
-    S: "thực tế – chú ý chi tiết, thích cái cụ thể",
-    N: "trực giác – nhìn bức tranh lớn, thích ý tưởng mới",
-    T: "lý trí – quyết định dựa trên logic, bằng chứng",
-    F: "cảm xúc – quyết định dựa trên giá trị, sự đồng cảm",
-    J: "nguyên tắc – thích kế hoạch, ngăn nắp",
-    P: "linh hoạt – thích ứng nhanh, cởi mở với lựa chọn"
+  // Bảng khoá: câu n nằm ở cột (n − 1) % 12; mỗi cột cho điểm 1 khi câu trả lời trùng dấu của cột.
+  // Cột 1–5: HN (hướng ngoại), cột 6–10: KOD (không ổn định cảm xúc), cột 11–12: S (thành thật).
+  // Bản gốc in dấu “−” ở cột 9–10 (câu 9, 10, 21, 22, 33, 34, 45, 46, 57, 58). Nội dung các câu này đều là
+  // biểu hiện không ổn định (tâm trạng thay đổi, run sợ, bực tức, ác mộng, mất ngủ…), nên ở đây tính “+”.
+  const EYSENCK_KEY = [["HN", "+"], ["HN", "+"], ["HN", "+"], ["HN", "-"], ["HN", "-"],
+    ["KOD", "+"], ["KOD", "+"], ["KOD", "+"], ["KOD", "+"], ["KOD", "+"], ["S", "+"], ["S", "-"]];
+  const EYSENCK_MID = 12; // tâm của biểu đồ trong tài liệu (trục 0–24)
+  const EYSENCK_TYPES = {
+    uuTu: { name: "Ưu tư", axis: "hướng nội, không ổn định", traits: [
+      "Ý nghĩ và cảm xúc tập trung nhiều vào nội tâm, ít quan tâm đến xung quanh; thiên về phân tích những tâm trạng của bản thân.",
+      "Rất dễ bi quan, hay lo âu; nhiều khi rất khắt khe với bản thân và với những người xung quanh.",
+      "Sống khá dè dặt vì vậy khó hòa đồng với mọi người.",
+      "Thao tác hơi chậm, đôi khi phản ứng một cách khó khăn, vụng về; dễ có cảm giác mệt mỏi.",
+      "Hay bị lúng túng trong việc ứng xử ở những hoàn cảnh mới."],
+      jobs: "nghiên cứu, thủ thư, công việc có sự lặp đi lặp lại trong các nhà máy và văn phòng, hoặc công việc sáng tạo trong nghệ thuật và quảng cáo" },
+    binhThan: { name: "Bình thản", axis: "hướng nội, ổn định", traits: [
+      "Trầm tính, luôn có cái nhìn chiều sâu về người khác.",
+      "Khá sâu sắc về tình cảm, dễ đồng cảm với mọi người (tuy nhiên không dễ dàng rung cảm ngay trước những biến cố trong đời sống).",
+      "Cẩn thận, điềm đạm nên trong mắt người khác là người rất đáng tin, mọi người hay tâm sự.",
+      "Trong hành động không vội vàng hấp tấp, có căn cứ lý luận, kiên trì, làm đến cùng theo mục đích.",
+      "Ưa sự ngăn nắp, gọn gàng."],
+      jobs: "nghiên cứu, thủ thư, nhân viên văn phòng, luật sư, quản lí ngân hàng, kế toán" },
+    nongNay: { name: "Nóng nảy", axis: "hướng ngoại, không ổn định", traits: [
+      "Dễ bị kích động, không kiềm chế được bản thân (dễ có phản ứng gay gắt khi không đồng ý về một vấn đề nào đó).",
+      "Các trạng thái tâm lý diễn ra nhanh với cường độ mạnh nhưng cũng kết thúc nhanh chóng.",
+      "Dễ đồng cảm, dễ thiết lập các mối quan hệ với mọi người nhưng khó có chiều sâu trong các mối quan hệ.",
+      "Dễ làm mất lòng người khác vì không lắng nghe họ nói.",
+      "Rất dễ bị tự ái; sống lạc quan và khá chủ động."],
+      jobs: "các ngành dịch vụ như hướng dẫn viên du lịch, nhân viên bán hàng; một số công việc mang tính sáng tạo về nghệ thuật hoặc quảng cáo" },
+    hangHai: { name: "Hăng hái", axis: "hướng ngoại, ổn định", traits: [
+      "Rất dễ hòa đồng với mọi người; nói nhiều và hay thổ lộ cảm xúc của mình với người xung quanh; dễ cảm thông.",
+      "Luôn nhìn cuộc sống rất sống động và vui tươi.",
+      "Thẳng thắn, kiên quyết, nói và làm đi đôi với nhau.",
+      "Có khả năng lãnh đạo."],
+      jobs: "hướng dẫn viên, nhân viên bán hàng, cảnh sát, phi công, nhân viên marketing, hoặc các lĩnh vực về truyền thông" }
   };
 
-  /* ---------- Đa trí tuệ Gardner (rút gọn, 24 câu) ---------- */
-  const GARDNER = [
-    { key: "ngonNgu", name: "Ngôn ngữ", items: ["Mình thích đọc, viết, kể chuyện", "Mình dễ nhớ từ mới, câu nói hay", "Mình diễn đạt ý tưởng bằng lời/văn bản tốt"] },
-    { key: "logic", name: "Logic – Toán học", items: ["Mình thích giải toán, câu đố logic", "Mình hay hỏi \"tại sao\" và tìm quy luật", "Mình thích sắp xếp, phân loại, tính toán"] },
-    { key: "khongGian", name: "Không gian – Hình ảnh", items: ["Mình hình dung đồ vật trong đầu dễ dàng", "Mình thích vẽ, thiết kế, xem bản đồ, sơ đồ", "Mình nhớ tốt bằng hình ảnh, màu sắc"] },
-    { key: "vanDong", name: "Vận động – Cơ thể", items: ["Mình học tốt khi được làm/thực hành", "Mình khéo tay hoặc giỏi thể thao", "Mình khó ngồi yên lâu, thích vận động"] },
-    { key: "amNhac", name: "Âm nhạc", items: ["Mình dễ nhớ giai điệu, nhịp điệu", "Mình chơi nhạc cụ/hát hoặc thích sáng tác", "Mình nhận ra khi nốt nhạc bị sai"] },
-    { key: "giaoTiep", name: "Giao tiếp (liên cá nhân)", items: ["Mình hiểu cảm xúc của người khác", "Bạn bè hay tìm mình để tâm sự/nhờ giúp", "Mình thích làm việc nhóm, điều phối nhóm"] },
-    { key: "noiTam", name: "Nội tâm", items: ["Mình hiểu rõ điểm mạnh, điểm yếu của bản thân", "Mình thường tự đặt mục tiêu và tự theo dõi", "Mình thích suy ngẫm, viết nhật ký"] },
-    { key: "thienNhien", name: "Thiên nhiên", items: ["Mình thích tìm hiểu cây cối, động vật, môi trường", "Mình dễ nhận biết, phân loại các loài/hiện tượng tự nhiên", "Mình quan tâm biến đổi khí hậu, bảo vệ môi trường"] }
+  /* ---------- Trắc nghiệm tính cách MBTI (70 câu, theo tài liệu “3. TN tinh-cach-MBTI”) ---------- */
+  // [câu hỏi, lựa chọn a, lựa chọn b]
+  const MBTI = [
+    ["Tại một buổi tiệc, bạn sẽ:", "Giao tiếp với nhiều người, kể cả người lạ", "Chỉ giao tiếp với một số ít người mà bạn đã quen"],
+    ["Bạn thấy mình là người nghiêng về kiểu nào nhiều hơn?", "Thực tế", "Sáng tạo"],
+    ["Bạn nghĩ tình huống nào tồi tệ hơn?", "Đầu óc của bạn cứ “bay bổng trên mây”", "Cuộc sống của bạn thật nhàm chán và không bao giờ thay đổi"],
+    ["Bạn sẽ bị ấn tượng hơn với:", "Các nguyên tắc", "Những cảm xúc"],
+    ["Khi quyết định việc gì đó, bạn thường hay dựa vào:", "Sự thuyết phục", "Sự đồng cảm"],
+    ["Bạn thích làm việc theo kiểu nào nhiều hơn?", "Theo đúng thời hạn", "Tùy hứng"],
+    ["Bạn có khuynh hướng đưa ra các lựa chọn:", "Rất cẩn thận", "Phần nào theo cảm nhận"],
+    ["Tại các bữa tiệc, bạn thường:", "Ở lại tới cùng và cảm thấy càng lúc càng hào hứng", "Ra về sớm vì cảm thấy mệt mỏi dần"],
+    ["Kiểu người nào sẽ thu hút bạn hơn?", "Người thực tế và có lý lẽ", "Người giàu trí tưởng tượng"],
+    ["Điều nào khiến bạn thấy thích thú hơn?", "Những điều thực tế", "Những ý tưởng khả thi"],
+    ["Khi đánh giá hoặc phán xét người khác, bạn thường hay dựa vào điều gì?", "Luật lệ và nguyên tắc", "Hoàn cảnh"],
+    ["Khi tiếp cận, tiếp xúc người khác, bạn nghiêng về hướng nào hơn?", "Tiếp cận theo hướng khách quan", "Tiếp cận theo hướng sử dụng trải nghiệm cá nhân"],
+    ["Phong cách của bạn nghiêng về hướng nào hơn?", "Đúng giờ, nghiêm túc", "Nhàn nhã, thoải mái"],
+    ["Bạn cảm thấy không thoải mái khi có những việc:", "Chưa hoàn thiện", "Đã quá hoàn thiện"],
+    ["Trong các mối quan hệ xã hội, bạn thường:", "Luôn nắm bắt kịp thời thông tin về các vấn đề của mọi người", "Thường biết thông tin sau những người khác"],
+    ["Với các công việc thông thường, bạn nghiêng về cách:", "Làm theo cách thông thường", "Làm theo cách của riêng mình"],
+    ["Các nhà văn nên:", "Viết những gì họ nghĩ và chân thật với những gì mình viết", "Diễn đạt sự việc bằng cách so sánh hay liên tưởng"],
+    ["Điều gì lôi cuốn bạn hơn?", "Tính nhất quán của tư duy, suy nghĩ", "Sự hòa hợp trong các mối quan hệ của con người"],
+    ["Bạn cảm thấy thoải mái hơn khi đưa ra:", "Những đánh giá, nhận xét một cách logic", "Những đánh giá, nhận xét một cách có ý nghĩa"],
+    ["Bạn thích những điều:", "Đã được sắp xếp, quyết định trước", "Chưa xác định, chưa được quyết định"],
+    ["Bạn tự thấy mình:", "Nghiêm túc, quyết đoán", "Dễ gần, thoải mái"],
+    ["Khi nói chuyện điện thoại, bạn:", "Cứ gọi bình thường", "Chuẩn bị trước những điều sẽ nói"],
+    ["Những sự kiện trong thực tế:", "Bản thân nó giải thích cho chính nó", "Nó là bằng chứng giải thích cho các quy tắc, quy luật"],
+    ["Những người có tầm nhìn xa/người lo xa:", "Thường gây khó chịu cho người khác", "Khá thú vị"],
+    ["Bạn thường là người:", "Cái đầu lạnh", "Trái tim nóng"],
+    ["Điều nào thì tồi tệ hơn?", "Không công bằng", "Tàn nhẫn"],
+    ["Các sự kiện nên xảy ra theo hướng:", "Được lựa chọn và cân nhắc kỹ lưỡng", "Ngẫu nhiên và tự nhiên"],
+    ["Bạn cảm thấy thoải mái hơn khi:", "Đã mua một thứ gì đó", "Đang lựa chọn để mua"],
+    ["Trong công ty, bạn là người:", "Khởi xướng các câu chuyện", "Đợi người khác bắt chuyện với mình"],
+    ["Đối với những quy ước, quy tắc thông thường trong xã hội, bạn:", "Ít khi nghi ngờ những điều này", "Thường xem xét lại tính đúng đắn của những điều đó"],
+    ["Trẻ em thường:", "Chưa cố gắng đủ", "Chưa vui chơi đủ"],
+    ["Khi đưa ra các quyết định, bạn sẽ thấy thoải mái hơn với:", "Các tiêu chuẩn", "Cảm xúc, cảm nhận"],
+    ["Bạn nghiêng về tính cách nào hơn?", "Cứng rắn", "Nhẹ nhàng"],
+    ["Theo bạn, khả năng nào đáng khâm phục hơn?", "Khả năng tổ chức và làm việc có phương pháp", "Khả năng thích ứng và xoay xở trước mọi tình huống"],
+    ["Bạn đề cao tố chất nào hơn?", "Sự chắc chắn", "Sự cởi mở"],
+    ["Khi phải tương tác với người khác ở các tình huống và vấn đề mới lạ, không thường gặp, bạn thường:", "Thấy phấn chấn và hào hứng", "Cảm thấy mệt mỏi"],
+    ["Thường thì bạn là:", "Người thực tế", "Người có khả năng tưởng tượng phong phú"],
+    ["Bạn thường có xu hướng:", "Xem người khác có thể làm được việc gì hữu ích", "Xem người khác sẽ nghĩ và cảm nhận như thế nào"],
+    ["Bạn cảm thấy thoải mái hơn khi:", "Thảo luận một vấn đề kĩ lưỡng, triệt để", "Đạt được thỏa thuận, sự nhất trí về vấn đề"],
+    ["Cái đầu hay trái tim chi phối bạn nhiều hơn?", "Cái đầu", "Trái tim"],
+    ["Bạn cảm thấy thoải mái hơn khi làm các công việc theo dạng:", "Được giao trọn gói, làm xong hết rồi bàn giao", "Công việc làm hàng ngày, theo lịch"],
+    ["Bạn có xu hướng tìm kiếm những điều:", "Theo trật tự, thứ tự", "Ngẫu nhiên"],
+    ["Bạn thích kiểu nào hơn?", "Nhiều bạn bè ở mức độ xã giao", "Một vài người bạn thân"],
+    ["Bạn thường dựa vào:", "Sự kiện, thông tin thực tế", "Nguyên lý, nguyên tắc"],
+    ["Bạn hứng thú với việc gì hơn?", "Sản xuất và phân phối", "Thiết kế và nghiên cứu"],
+    ["Lời khen nào giá trị hơn?", "“Đó là một người có suy nghĩ rất logic”", "“Đó là một người rất tình cảm, tinh tế”"],
+    ["Bạn thích mình có tố chất nào hơn?", "Kiên định, vững vàng", "Toàn tâm, cống hiến"],
+    ["Bạn thường thích điều nào hơn?", "Một tuyên bố cuối cùng, không thay đổi", "Một tuyên bố dự kiến, ban đầu"],
+    ["Bạn thấy thoải mái hơn vào lúc:", "Trước khi đưa ra quyết định", "Sau khi đưa ra quyết định"],
+    ["Bạn có thấy mình:", "Dễ dàng bắt chuyện và kéo dài cuộc trò chuyện với người mới gặp", "Khó mà trò chuyện nhiều với những người mới quen"],
+    ["Bạn có xu hướng tin tưởng vào:", "Kinh nghiệm của mình", "Linh cảm của mình"],
+    ["Bạn cho rằng mình thuộc tuýp người nào hơn?", "Người thực tế", "Người khôn khéo"],
+    ["Theo bạn ai là người đáng được khen ngợi hơn?", "Một người giàu lý trí", "Một người giàu cảm xúc"],
+    ["Bạn có xu hướng hành xử:", "Công bằng, vô tư", "Thông cảm, đồng cảm"],
+    ["Bạn thích:", "Đảm bảo rằng mọi việc được chuẩn bị, thu xếp sẵn sàng", "Để mọi việc diễn ra tự nhiên"],
+    ["Trong các mối quan hệ thì mọi việc:", "Có thể thảo luận để giải quyết được", "Diễn ra ngẫu nhiên và tùy theo điều kiện hoàn cảnh"],
+    ["Khi chuông điện thoại reo, bạn sẽ:", "Là người đầu tiên nhấc máy", "Hi vọng có người khác sẽ nhấc máy"],
+    ["Bạn đánh giá cao điều gì trong mình hơn?", "Nhận thức tốt về các yếu tố thực tế", "Có trí tưởng tượng phong phú, rực rỡ"],
+    ["Bạn sẽ chú tâm hơn đến:", "Các nguyên tắc, nguyên lý cơ bản", "Các ngụ ý, hàm ý, ẩn ý"],
+    ["Điều gì có vẻ sẽ là một lỗi lớn hơn?", "Quá nồng nhiệt, thiết tha", "Quá khách quan, thờ ơ"],
+    ["Về cơ bản, bạn sẽ đánh giá mình là người thế nào?", "Thiết thực, ít bị chi phối bởi tình cảm", "Từ tâm, đa cảm"],
+    ["Tình huống nào sẽ lôi cuốn bạn hơn?", "Tình huống rõ ràng, có kế hoạch", "Tình huống không xác định, không có kế hoạch"],
+    ["Bạn là người có xu hướng nào hơn?", "Theo thói quen", "Hay thay đổi"],
+    ["Bạn có xu hướng nào hơn?", "Là người dễ tiếp cận", "Ở mức độ nào đó là người kín đáo"],
+    ["Khi viết, bạn thích:", "Viết theo hướng văn chương hơn", "Viết theo số liệu, dữ liệu hơn"],
+    ["Đối với bạn, điều gì khó thực hiện hơn?", "Hiểu và chia sẻ với người khác", "Điều khiển người khác"],
+    ["Bạn mong ước mình sẽ có thêm nhiều điều gì?", "Lí trí và khả năng nhận xét rõ ràng", "Tình thương, lòng trắc ẩn sâu sắc"],
+    ["Điều gì sẽ là lỗi lớn hơn?", "Hành động bừa bãi, không cân nhắc", "Hành động chỉ trích, phê phán"],
+    ["Bạn sẽ thích sự kiện nào hơn?", "Sự kiện có lên kế hoạch trước", "Sự kiện không có kế hoạch trước"],
+    ["Bạn thường có hành động:", "Cân nhắc thận trọng", "Tự nhiên, tự phát"]
   ];
-  const LIKERT5 = ["Hoàn toàn không giống", "Ít giống", "Phân vân", "Khá giống", "Rất giống mình"];
-
+  // Bảng tính điểm: câu n nằm ở cột (n − 1) % 7. Cột 1 → E/I; cột 2–3 → S/N; cột 4–5 → T/F; cột 6–7 → J/P (a → chữ trước, b → chữ sau).
+  const MBTI_DIMS = [
+    { dim: "EI", a: "E", b: "I", label: "Nguồn năng lượng", cols: [0] },
+    { dim: "SN", a: "S", b: "N", label: "Cách tiếp nhận thông tin", cols: [1, 2] },
+    { dim: "TF", a: "T", b: "F", label: "Cách ra quyết định", cols: [3, 4] },
+    { dim: "JP", a: "J", b: "P", label: "Cách tổ chức công việc", cols: [5, 6] }
+  ];
+  const MBTI_DESC = {
+    E: "Hướng ngoại – nạp năng lượng khi giao tiếp, làm việc cùng nhiều người",
+    I: "Hướng nội – nạp năng lượng khi ở một mình, tập trung sâu, làm việc độc lập tốt",
+    S: "Giác quan – chú ý sự kiện, chi tiết cụ thể, tin vào kinh nghiệm thực tế",
+    N: "Trực giác – chú ý ý tưởng, bức tranh tổng thể và các khả năng mới",
+    T: "Lý trí – quyết định dựa trên logic, nguyên tắc, tính khách quan",
+    F: "Cảm xúc – quyết định dựa trên giá trị, sự đồng cảm, hòa hợp giữa mọi người",
+    J: "Nguyên tắc – thích kế hoạch rõ ràng, ngăn nắp, chốt việc sớm",
+    P: "Linh hoạt – thích để ngỏ lựa chọn, thích ứng nhanh với tình huống"
+  };
 
   /* ---------- Trọng số liên hệ sở thích → môn lựa chọn ---------- */
   const HOLLAND_SUBJ = {
@@ -141,50 +284,46 @@ window.CTV_DATA = (function () {
     E: { gdkt: 1, dia: .6, tin: .6, li: .3 },
     C: { tin: 1, gdkt: .6, li: .4, dia: .4, hoa: .3 }
   };
-  const GARDNER_SUBJ = {
-    ngonNgu: { gdkt: .6, dia: .3 }, logic: { li: 1, hoa: .8, tin: 1 }, khongGian: { mt: 1, cn: .8, dia: .6 },
-    vanDong: { cn: .8, sinh: .3 }, amNhac: { an: 1 }, giaoTiep: { gdkt: .7, dia: .4 }, noiTam: {},
-    thienNhien: { sinh: 1, dia: .8, hoa: .5, cn: .4 }
-  };
 
-  /* ---------- Ngành nghề (minh hoạ – tổ hợp xét tuyển cần kiểm tra theo từng trường) ---------- */
+  /* ---------- Ngành nghề (minh hoạ – tổ hợp xét tuyển cần kiểm tra theo từng trường) ----------
+     ey: ngành nằm trong gợi ý nghề của tài liệu Eysenck cho khí chất nào (giá trị = cụm từ trích từ tài liệu) */
   const CAREERS = [
-    { name: "Y đa khoa", group: "Sức khoẻ", h: "ISR", g: ["logic", "thienNhien", "giaoTiep"], th: ["B00", "A00", "B08", "D07"], thcs: ["khtn_hoa", "khtn_sinh", "toan"], desc: "Khám, chẩn đoán, điều trị bệnh. Học dài (6 năm+), cần bền bỉ và tinh thần trách nhiệm cao." },
-    { name: "Dược học", group: "Sức khoẻ", h: "ICR", g: ["logic", "thienNhien"], th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "khtn_sinh", "toan"], desc: "Nghiên cứu, sản xuất, tư vấn sử dụng thuốc; làm ở nhà thuốc, bệnh viện, công ty dược." },
-    { name: "Điều dưỡng", group: "Sức khoẻ", h: "SIR", g: ["giaoTiep", "thienNhien"], th: ["B00", "B08", "A00"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Chăm sóc, theo dõi người bệnh; cần sự tận tâm, kiên nhẫn, sức khoẻ tốt." },
-    { name: "Răng – Hàm – Mặt", group: "Sức khoẻ", h: "IRA", g: ["logic", "vanDong", "khongGian"], th: ["B00", "A00"], thcs: ["khtn_hoa", "khtn_sinh"], desc: "Chẩn đoán, điều trị bệnh răng miệng; cần sự khéo léo, tỉ mỉ." },
-    { name: "Kỹ thuật xét nghiệm y học", group: "Sức khoẻ", h: "ICR", g: ["logic", "thienNhien"], th: ["B00", "A00", "B08"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Thực hiện xét nghiệm hỗ trợ chẩn đoán; làm việc trong phòng thí nghiệm." },
-    { name: "Công nghệ thông tin", group: "Công nghệ – Kỹ thuật", h: "IRC", g: ["logic", "noiTam"], th: ["A00", "A01", "D01", "T-TIN", "T-LT"], thcs: ["toan", "tin", "khtn_li"], desc: "Phát triển phần mềm, hệ thống, mạng; nhu cầu tuyển dụng rộng ở nhiều lĩnh vực." },
-    { name: "Khoa học dữ liệu & Trí tuệ nhân tạo", group: "Công nghệ – Kỹ thuật", h: "ICR", g: ["logic"], th: ["A00", "A01", "D01", "T-TIN", "T-LT"], thcs: ["toan", "tin"], desc: "Phân tích dữ liệu, xây dựng mô hình AI; cần Toán tốt và tư duy logic." },
-    { name: "An toàn thông tin", group: "Công nghệ – Kỹ thuật", h: "ICR", g: ["logic", "noiTam"], th: ["A00", "A01", "T-TIN", "T-LT"], thcs: ["toan", "tin"], desc: "Bảo vệ hệ thống, dữ liệu trước tấn công mạng." },
-    { name: "Kỹ thuật điện – điện tử", group: "Công nghệ – Kỹ thuật", h: "RIC", g: ["logic", "khongGian"], th: ["A00", "A01", "T-CN", "T-LT"], thcs: ["khtn_li", "toan", "cn"], desc: "Thiết kế, vận hành hệ thống điện, mạch điện tử, thiết bị thông minh." },
-    { name: "Kỹ thuật cơ khí – Cơ điện tử", group: "Công nghệ – Kỹ thuật", h: "RIC", g: ["khongGian", "vanDong", "logic"], th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "toan", "cn"], desc: "Thiết kế, chế tạo máy móc, robot, dây chuyền tự động." },
-    { name: "Kỹ thuật ô tô", group: "Công nghệ – Kỹ thuật", h: "RIE", g: ["vanDong", "khongGian"], th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "cn"], desc: "Thiết kế, bảo dưỡng, sửa chữa ô tô và phương tiện điện." },
-    { name: "Xây dựng", group: "Công nghệ – Kỹ thuật", h: "RIC", g: ["khongGian", "logic"], th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "toan"], desc: "Thiết kế, thi công, quản lý công trình." },
-    { name: "Kiến trúc", group: "Công nghệ – Kỹ thuật", h: "AIR", g: ["khongGian", "logic"], th: ["V00", "A00", "A01"], thcs: ["toan", "mt", "khtn_li"], desc: "Thiết kế công trình, không gian; thường thi thêm năng khiếu vẽ." },
-    { name: "Công nghệ sinh học", group: "Khoa học tự nhiên", h: "IRC", g: ["thienNhien", "logic"], th: ["B00", "A00", "D07"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Ứng dụng sinh học trong y dược, nông nghiệp, thực phẩm." },
-    { name: "Công nghệ thực phẩm", group: "Khoa học tự nhiên", h: "IRC", g: ["thienNhien", "logic"], th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "khtn_sinh"], desc: "Chế biến, bảo quản, kiểm định chất lượng thực phẩm." },
-    { name: "Khoa học môi trường", group: "Khoa học tự nhiên", h: "IRS", g: ["thienNhien"], th: ["A00", "B00", "D07", "C00"], thcs: ["khtn_hoa", "khtn_sinh", "dia"], desc: "Đánh giá, xử lý, quản lý môi trường; phát triển bền vững." },
-    { name: "Hoá học – Vật liệu", group: "Khoa học tự nhiên", h: "IRC", g: ["logic", "thienNhien"], th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "toan"], desc: "Nghiên cứu, sản xuất hoá chất, vật liệu mới." },
-    { name: "Nông nghiệp công nghệ cao", group: "Nông – Lâm – Thuỷ sản", h: "RIE", g: ["thienNhien", "vanDong"], th: ["B00", "A00", "B08"], thcs: ["khtn_sinh", "cn"], desc: "Trồng trọt, chăn nuôi ứng dụng công nghệ, quản lý trang trại." },
-    { name: "Thú y", group: "Nông – Lâm – Thuỷ sản", h: "IRS", g: ["thienNhien"], th: ["B00", "A00"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Chăm sóc, chữa bệnh cho vật nuôi; kiểm dịch động vật." },
-    { name: "Kinh tế – Quản trị kinh doanh", group: "Kinh tế – Quản lý", h: "ECS", g: ["giaoTiep", "logic"], th: ["A00", "A01", "D01", "C14"], thcs: ["toan", "anh", "gdcd"], desc: "Quản lý doanh nghiệp, nhân sự, vận hành; phù hợp người năng động, thích dẫn dắt." },
-    { name: "Marketing", group: "Kinh tế – Quản lý", h: "EAS", g: ["giaoTiep", "ngonNgu", "khongGian"], th: ["A01", "D01", "C14", "A00"], thcs: ["van", "anh", "toan"], desc: "Nghiên cứu thị trường, xây dựng thương hiệu, truyền thông sản phẩm." },
-    { name: "Tài chính – Ngân hàng", group: "Kinh tế – Quản lý", h: "CEI", g: ["logic"], th: ["A00", "A01", "D01", "C14"], thcs: ["toan", "anh"], desc: "Quản lý tài chính, đầu tư, ngân hàng; cần cẩn thận và giỏi tính toán." },
-    { name: "Kế toán – Kiểm toán", group: "Kinh tế – Quản lý", h: "CIE", g: ["logic", "noiTam"], th: ["A00", "A01", "D01", "C14"], thcs: ["toan"], desc: "Ghi chép, phân tích, kiểm tra số liệu tài chính." },
-    { name: "Logistics – Chuỗi cung ứng", group: "Kinh tế – Quản lý", h: "ECR", g: ["logic", "giaoTiep"], th: ["A00", "A01", "D01", "C00"], thcs: ["toan", "anh", "dia"], desc: "Quản lý vận tải, kho bãi, xuất nhập khẩu." },
-    { name: "Luật", group: "Xã hội – Nhân văn", h: "ESI", g: ["ngonNgu", "giaoTiep", "logic"], th: ["C00", "D01", "A00", "C14"], thcs: ["van", "gdcd", "su"], desc: "Tư vấn, bảo vệ quyền lợi pháp lý; cần lập luận chặt chẽ, diễn đạt tốt." },
-    { name: "Báo chí – Truyền thông", group: "Xã hội – Nhân văn", h: "AES", g: ["ngonNgu", "giaoTiep"], th: ["C00", "D01", "D14", "D15"], thcs: ["van", "su", "dia"], desc: "Sản xuất tin tức, nội dung đa phương tiện, quan hệ công chúng." },
-    { name: "Tâm lý học", group: "Xã hội – Nhân văn", h: "SIA", g: ["giaoTiep", "noiTam"], th: ["B00", "C00", "D01"], thcs: ["van", "khtn_sinh"], desc: "Nghiên cứu, tư vấn tâm lý trong trường học, doanh nghiệp, bệnh viện." },
-    { name: "Sư phạm (Tiểu học, KHXH)", group: "Giáo dục", h: "SAC", g: ["giaoTiep", "ngonNgu"], th: ["C00", "D01", "D14", "D15"], thcs: ["van", "su", "dia"], desc: "Giảng dạy ở bậc tiểu học hoặc môn khoa học xã hội." },
-    { name: "Sư phạm (Toán, KHTN, Tin)", group: "Giáo dục", h: "SIC", g: ["logic", "giaoTiep"], th: ["A00", "A01", "B00", "D01"], thcs: ["toan", "khtn_li", "khtn_hoa"], desc: "Giảng dạy Toán, Vật lí, Hoá học, Sinh học hoặc Tin học." },
-    { name: "Ngôn ngữ Anh – Quan hệ quốc tế", group: "Xã hội – Nhân văn", h: "SEA", g: ["ngonNgu", "giaoTiep"], th: ["D01", "D14", "D15", "C00"], thcs: ["anh", "van"], desc: "Biên – phiên dịch, ngoại giao, làm việc trong môi trường quốc tế." },
-    { name: "Du lịch – Khách sạn", group: "Dịch vụ", h: "ESA", g: ["giaoTiep", "ngonNgu"], th: ["C00", "D01", "D15", "A01"], thcs: ["dia", "anh", "van"], desc: "Hướng dẫn du lịch, quản lý khách sạn, tổ chức sự kiện." },
-    { name: "Thiết kế đồ hoạ", group: "Nghệ thuật – Thiết kế", h: "AEI", g: ["khongGian"], th: ["H00", "V00", "T-TIN"], thcs: ["mt", "tin"], desc: "Thiết kế hình ảnh, nhận diện thương hiệu, giao diện số." },
-    { name: "Thiết kế thời trang – nội thất", group: "Nghệ thuật – Thiết kế", h: "AER", g: ["khongGian", "vanDong"], th: ["H00", "V00"], thcs: ["mt"], desc: "Sáng tạo trang phục, không gian sống; thường thi năng khiếu vẽ." },
-    { name: "Âm nhạc – Nghệ thuật biểu diễn", group: "Nghệ thuật – Thiết kế", h: "AES", g: ["amNhac", "vanDong"], th: ["N00"], thcs: ["an"], desc: "Biểu diễn, sáng tác, sản xuất âm nhạc; thi năng khiếu." },
-    { name: "Công an – Quân đội", group: "An ninh – Quốc phòng", h: "RES", g: ["vanDong", "giaoTiep"], th: ["A00", "A01", "C00", "D01"], thcs: ["toan", "van"], desc: "Bảo vệ an ninh, quốc phòng; có tiêu chuẩn sức khoẻ, sơ tuyển riêng." },
-    { name: "Địa lí – Quản lý đất đai – Bản đồ", group: "Khoa học tự nhiên", h: "RIC", g: ["khongGian", "thienNhien"], th: ["A00", "C00", "D15"], thcs: ["dia", "toan"], desc: "Đo đạc, bản đồ số, GIS, quy hoạch – quản lý tài nguyên đất." }
+    { name: "Y đa khoa", group: "Sức khoẻ", h: "ISR", th: ["B00", "A00", "B08", "D07"], thcs: ["khtn_hoa", "khtn_sinh", "toan"], desc: "Khám, chẩn đoán, điều trị bệnh. Học dài (6 năm+), cần bền bỉ và tinh thần trách nhiệm cao." },
+    { name: "Dược học", group: "Sức khoẻ", h: "ICR", th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "khtn_sinh", "toan"], desc: "Nghiên cứu, sản xuất, tư vấn sử dụng thuốc; làm ở nhà thuốc, bệnh viện, công ty dược." },
+    { name: "Điều dưỡng", group: "Sức khoẻ", h: "SIR", th: ["B00", "B08", "A00"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Chăm sóc, theo dõi người bệnh; cần sự tận tâm, kiên nhẫn, sức khoẻ tốt." },
+    { name: "Răng – Hàm – Mặt", group: "Sức khoẻ", h: "IRA", th: ["B00", "A00"], thcs: ["khtn_hoa", "khtn_sinh"], desc: "Chẩn đoán, điều trị bệnh răng miệng; cần sự khéo léo, tỉ mỉ." },
+    { name: "Kỹ thuật xét nghiệm y học", group: "Sức khoẻ", h: "ICR", th: ["B00", "A00", "B08"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Thực hiện xét nghiệm hỗ trợ chẩn đoán; làm việc trong phòng thí nghiệm." },
+    { name: "Công nghệ thông tin", group: "Công nghệ – Kỹ thuật", h: "IRC", th: ["A00", "A01", "D01", "T-TIN", "T-LT"], thcs: ["toan", "tin", "khtn_li"], desc: "Phát triển phần mềm, hệ thống, mạng; nhu cầu tuyển dụng rộng ở nhiều lĩnh vực." },
+    { name: "Khoa học dữ liệu & Trí tuệ nhân tạo", group: "Công nghệ – Kỹ thuật", h: "ICR", ey: { uuTu: "nghiên cứu", binhThan: "nghiên cứu" }, th: ["A00", "A01", "D01", "T-TIN", "T-LT"], thcs: ["toan", "tin"], desc: "Phân tích dữ liệu, xây dựng mô hình AI; cần Toán tốt và tư duy logic." },
+    { name: "An toàn thông tin", group: "Công nghệ – Kỹ thuật", h: "ICR", th: ["A00", "A01", "T-TIN", "T-LT"], thcs: ["toan", "tin"], desc: "Bảo vệ hệ thống, dữ liệu trước tấn công mạng." },
+    { name: "Kỹ thuật điện – điện tử", group: "Công nghệ – Kỹ thuật", h: "RIC", th: ["A00", "A01", "T-CN", "T-LT"], thcs: ["khtn_li", "toan", "cn"], desc: "Thiết kế, vận hành hệ thống điện, mạch điện tử, thiết bị thông minh." },
+    { name: "Kỹ thuật cơ khí – Cơ điện tử", group: "Công nghệ – Kỹ thuật", h: "RIC", th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "toan", "cn"], desc: "Thiết kế, chế tạo máy móc, robot, dây chuyền tự động." },
+    { name: "Kỹ thuật ô tô", group: "Công nghệ – Kỹ thuật", h: "RIE", th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "cn"], desc: "Thiết kế, bảo dưỡng, sửa chữa ô tô và phương tiện điện." },
+    { name: "Xây dựng", group: "Công nghệ – Kỹ thuật", h: "RIC", th: ["A00", "A01", "T-CN"], thcs: ["khtn_li", "toan"], desc: "Thiết kế, thi công, quản lý công trình." },
+    { name: "Kiến trúc", group: "Công nghệ – Kỹ thuật", h: "AIR", th: ["V00", "A00", "A01"], thcs: ["toan", "mt", "khtn_li"], desc: "Thiết kế công trình, không gian; thường thi thêm năng khiếu vẽ." },
+    { name: "Công nghệ sinh học", group: "Khoa học tự nhiên", h: "IRC", ey: { uuTu: "nghiên cứu", binhThan: "nghiên cứu" }, th: ["B00", "A00", "D07"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Ứng dụng sinh học trong y dược, nông nghiệp, thực phẩm." },
+    { name: "Công nghệ thực phẩm", group: "Khoa học tự nhiên", h: "IRC", th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "khtn_sinh"], desc: "Chế biến, bảo quản, kiểm định chất lượng thực phẩm." },
+    { name: "Khoa học môi trường", group: "Khoa học tự nhiên", h: "IRS", ey: { uuTu: "nghiên cứu", binhThan: "nghiên cứu" }, th: ["A00", "B00", "D07", "C00"], thcs: ["khtn_hoa", "khtn_sinh", "dia"], desc: "Đánh giá, xử lý, quản lý môi trường; phát triển bền vững." },
+    { name: "Hoá học – Vật liệu", group: "Khoa học tự nhiên", h: "IRC", ey: { uuTu: "nghiên cứu", binhThan: "nghiên cứu" }, th: ["A00", "B00", "D07"], thcs: ["khtn_hoa", "toan"], desc: "Nghiên cứu, sản xuất hoá chất, vật liệu mới." },
+    { name: "Nông nghiệp công nghệ cao", group: "Nông – Lâm – Thuỷ sản", h: "RIE", th: ["B00", "A00", "B08"], thcs: ["khtn_sinh", "cn"], desc: "Trồng trọt, chăn nuôi ứng dụng công nghệ, quản lý trang trại." },
+    { name: "Thú y", group: "Nông – Lâm – Thuỷ sản", h: "IRS", th: ["B00", "A00"], thcs: ["khtn_sinh", "khtn_hoa"], desc: "Chăm sóc, chữa bệnh cho vật nuôi; kiểm dịch động vật." },
+    { name: "Kinh tế – Quản trị kinh doanh", group: "Kinh tế – Quản lý", h: "ECS", th: ["A00", "A01", "D01", "C14"], thcs: ["toan", "anh", "gdcd"], desc: "Quản lý doanh nghiệp, nhân sự, vận hành; phù hợp người năng động, thích dẫn dắt." },
+    { name: "Marketing", group: "Kinh tế – Quản lý", h: "EAS", ey: { hangHai: "nhân viên marketing", uuTu: "quảng cáo", nongNay: "quảng cáo" }, th: ["A01", "D01", "C14", "A00"], thcs: ["van", "anh", "toan"], desc: "Nghiên cứu thị trường, xây dựng thương hiệu, truyền thông sản phẩm." },
+    { name: "Tài chính – Ngân hàng", group: "Kinh tế – Quản lý", h: "CEI", ey: { binhThan: "quản lí ngân hàng" }, th: ["A00", "A01", "D01", "C14"], thcs: ["toan", "anh"], desc: "Quản lý tài chính, đầu tư, ngân hàng; cần cẩn thận và giỏi tính toán." },
+    { name: "Kế toán – Kiểm toán", group: "Kinh tế – Quản lý", h: "CIE", ey: { binhThan: "kế toán", uuTu: "công việc văn phòng" }, th: ["A00", "A01", "D01", "C14"], thcs: ["toan"], desc: "Ghi chép, phân tích, kiểm tra số liệu tài chính." },
+    { name: "Logistics – Chuỗi cung ứng", group: "Kinh tế – Quản lý", h: "ECR", th: ["A00", "A01", "D01", "C00"], thcs: ["toan", "anh", "dia"], desc: "Quản lý vận tải, kho bãi, xuất nhập khẩu." },
+    { name: "Luật", group: "Xã hội – Nhân văn", h: "ESI", ey: { binhThan: "luật sư" }, th: ["C00", "D01", "A00", "C14"], thcs: ["van", "gdcd", "su"], desc: "Tư vấn, bảo vệ quyền lợi pháp lý; cần lập luận chặt chẽ, diễn đạt tốt." },
+    { name: "Báo chí – Truyền thông", group: "Xã hội – Nhân văn", h: "AES", ey: { hangHai: "truyền thông" }, th: ["C00", "D01", "D14", "D15"], thcs: ["van", "su", "dia"], desc: "Sản xuất tin tức, nội dung đa phương tiện, quan hệ công chúng." },
+    { name: "Tâm lý học", group: "Xã hội – Nhân văn", h: "SIA", th: ["B00", "C00", "D01"], thcs: ["van", "khtn_sinh"], desc: "Nghiên cứu, tư vấn tâm lý trong trường học, doanh nghiệp, bệnh viện." },
+    { name: "Sư phạm (Tiểu học, KHXH)", group: "Giáo dục", h: "SAC", th: ["C00", "D01", "D14", "D15"], thcs: ["van", "su", "dia"], desc: "Giảng dạy ở bậc tiểu học hoặc môn khoa học xã hội." },
+    { name: "Sư phạm (Toán, KHTN, Tin)", group: "Giáo dục", h: "SIC", th: ["A00", "A01", "B00", "D01"], thcs: ["toan", "khtn_li", "khtn_hoa"], desc: "Giảng dạy Toán, Vật lí, Hoá học, Sinh học hoặc Tin học." },
+    { name: "Ngôn ngữ Anh – Quan hệ quốc tế", group: "Xã hội – Nhân văn", h: "SEA", th: ["D01", "D14", "D15", "C00"], thcs: ["anh", "van"], desc: "Biên – phiên dịch, ngoại giao, làm việc trong môi trường quốc tế." },
+    { name: "Du lịch – Khách sạn", group: "Dịch vụ", h: "ESA", ey: { nongNay: "hướng dẫn viên du lịch", hangHai: "hướng dẫn viên" }, th: ["C00", "D01", "D15", "A01"], thcs: ["dia", "anh", "van"], desc: "Hướng dẫn du lịch, quản lý khách sạn, tổ chức sự kiện." },
+    { name: "Thiết kế đồ hoạ", group: "Nghệ thuật – Thiết kế", h: "AEI", ey: { uuTu: "sáng tạo nghệ thuật, quảng cáo", nongNay: "sáng tạo nghệ thuật, quảng cáo" }, th: ["H00", "V00", "T-TIN"], thcs: ["mt", "tin"], desc: "Thiết kế hình ảnh, nhận diện thương hiệu, giao diện số." },
+    { name: "Thiết kế thời trang – nội thất", group: "Nghệ thuật – Thiết kế", h: "AER", ey: { uuTu: "sáng tạo nghệ thuật", nongNay: "sáng tạo nghệ thuật" }, th: ["H00", "V00"], thcs: ["mt"], desc: "Sáng tạo trang phục, không gian sống; thường thi năng khiếu vẽ." },
+    { name: "Âm nhạc – Nghệ thuật biểu diễn", group: "Nghệ thuật – Thiết kế", h: "AES", ey: { uuTu: "sáng tạo nghệ thuật", nongNay: "sáng tạo nghệ thuật" }, th: ["N00"], thcs: ["an"], desc: "Biểu diễn, sáng tác, sản xuất âm nhạc; thi năng khiếu." },
+    { name: "Công an – Quân đội", group: "An ninh – Quốc phòng", h: "RES", ey: { hangHai: "cảnh sát" }, th: ["A00", "A01", "C00", "D01"], thcs: ["toan", "van"], desc: "Bảo vệ an ninh, quốc phòng; có tiêu chuẩn sức khoẻ, sơ tuyển riêng." },
+    { name: "Địa lí – Quản lý đất đai – Bản đồ", group: "Khoa học tự nhiên", h: "RIC", th: ["A00", "C00", "D15"], thcs: ["dia", "toan"], desc: "Đo đạc, bản đồ số, GIS, quy hoạch – quản lý tài nguyên đất." }
   ];
 
   /* ---------- Trường mẫu (DỮ LIỆU MINH HOẠ – không phải danh sách thật của trường nào) ---------- */
@@ -250,6 +389,6 @@ window.CTV_DATA = (function () {
   ];
 
   return { SUBJECTS, SUBJECT_ORDER, CHUYEN_DE, COMPULSORY, THCS, TO_HOP, HOLLAND, HOLLAND_SCALE,
-    PERSONALITY, PERSONALITY_DESC, GARDNER, LIKERT5, HOLLAND_SUBJ, GARDNER_SUBJ, CAREERS, SAMPLE_SCHOOLS,
+    EYSENCK, EYSENCK_KEY, EYSENCK_MID, EYSENCK_TYPES, MBTI, MBTI_DIMS, MBTI_DESC, HOLLAND_SUBJ, CAREERS, SAMPLE_SCHOOLS,
     SATISFACTION, SUBJECT_SAT, STRESS, PERIODS, TALENT_KEYS };
 })();

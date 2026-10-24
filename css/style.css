@@ -202,6 +202,17 @@ legend { font-weight: 700; padding: 0 6px; color: var(--ink); }
 .ab button { border: 1.5px solid var(--line); background: #fff; border-radius: 8px; padding: 9px 12px; text-align: left; cursor: pointer; font-size: .93rem; }
 .ab button[aria-pressed=true] { border-color: var(--ink); background: var(--ink-soft); font-weight: 600; }
 .scale-legend { font-size: .82rem; color: var(--muted); margin-bottom: 10px; }
+.scale.yn button { min-width: 64px; padding: 0 10px; }
+.mb-q .q-text { margin: 14px 0 0; }
+.mb-q .ab { padding-top: 6px; }
+.ey-chart { margin: 8px 0 12px; }
+.ey-chart svg { display: block; width: 100%; max-width: 360px; height: auto; }
+.ey-ring { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.ey-ax { stroke: var(--muted); stroke-width: 1; }
+.ey-lab { font-size: 11px; fill: var(--muted); }
+.ey-q { font-size: 12px; font-weight: 700; fill: var(--muted); text-anchor: middle; }
+.ey-q.on { fill: var(--ink); font-size: 13px; }
+.ey-pt { fill: var(--ink); stroke: #fff; stroke-width: 2; }
 .progress { height: 8px; background: var(--ink-soft); border-radius: 99px; overflow: hidden; margin: 6px 0 16px; }
 .progress span { display: block; height: 100%; background: var(--ink); }
 
@@ -209,7 +220,7 @@ legend { font-weight: 700; padding: 0 6px; color: var(--ink); }
 .bars { display: grid; gap: 8px; }
 .bar { display: grid; grid-template-columns: 170px minmax(0, 1fr) 54px; gap: 10px; align-items: center; font-size: .9rem; }
 .bar-track { height: 14px; background: var(--ink-soft); border-radius: 3px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--ink); }
+.bar-fill { display: block; height: 100%; background: var(--ink); }
 .bar-val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .code-big { font-size: 2.6rem; font-weight: 800; color: var(--ink); letter-spacing: .08em; }
 

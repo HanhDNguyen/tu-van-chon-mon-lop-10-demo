@@ -10,13 +10,11 @@
   /* ================= TRẠNG THÁI ================= */
   function blankState() {
     const hol = {}; D.HOLLAND.forEach(g => hol[g.key] = Array(9).fill(null));
-    const pers = {}; D.PERSONALITY.forEach(p => pers[p.dim] = Array(4).fill(null));
-    const gar = {}; D.GARDNER.forEach(g => gar[g.key] = Array(3).fill(null));
     return {
       v: 2, role: null, step: 0,
       profile: { code: "", nickname: "", className: "", schoolId: "", schoolOther: "", province: "", grades: {}, exam10: "", talents: "",
         liked: [], disliked: [], cond: { extra: "", time: "", device: "", econ: "" }, health: "", wish: "", familyWish: "" },
-      tests: { holland: hol, pers: pers, gardner: gar },
+      tests: { holland: hol, eysenck: Array(D.EYSENCK.length).fill(null), mbti: Array(D.MBTI.length).fill(null) },
       careerFb: {}, careerGroup: "",
       constraints: { must: [] },
       shortlist: [], final: { schoolId: "", comboKey: "", cd: [], checks: {}, confirmed: false },
@@ -40,9 +38,9 @@
     if (!s) return s;
     if (Array.isArray(s.schools) && s.schools.length) { const loc = localSchools(); s.schools.forEach(x => { if (!loc.find(y => y.id === x.id)) loc.push(x); }); saveLocalSchools(loc); }
     delete s.schools; delete s.builder;
-    if (s.tests) delete s.tests.tpb;
+    if (s.tests) { delete s.tests.tpb; delete s.tests.pers; delete s.tests.gardner; } // đã thay bằng Eysenck và MBTI
     if (s.constraints && s.constraints.exclude) { s.profile = s.profile || {}; s.profile.disliked = [...new Set([...(s.profile.disliked || []), ...s.constraints.exclude])]; delete s.constraints.exclude; }
-    if (s.ui && s.ui.testTab === "tpb") s.ui.testTab = "holland";
+    if (s.ui && ["tpb", "pers", "gardner"].includes(s.ui.testTab)) s.ui.testTab = "holland";
     s.v = 2;
     return s;
   }
@@ -132,17 +130,30 @@
     const order = Object.keys(sc).sort((a, b) => sc[b] - sc[a]);
     return { sc, answered, done, order, code: order.slice(0, 3).join(""), flat: done && (sc[order[0]] - sc[order[2]] < 4 || sc[order[0]] < 14) };
   }
-  function persStats() {
-    let answered = 0; const res = {};
-    D.PERSONALITY.forEach(p => { const a = S.tests.pers[p.dim]; answered += a.filter(Boolean).length; const ca = a.filter(x => x === "a").length, cb = a.filter(x => x === "b").length; res[p.dim] = { a: ca, b: cb, letter: ca > cb ? p.a : cb > ca ? p.b : p.a + "/" + p.b }; });
-    return { res, answered, done: answered === 16, type: D.PERSONALITY.map(p => res[p.dim].letter).join(" – ") };
+  // Eysenck: mỗi câu cho 1 điểm vào thang của cột nếu câu trả lời trùng dấu (bảng khoá trong data.js)
+  function eysenckStats() {
+    const sc = { HN: 0, KOD: 0, S: 0 }; let answered = 0;
+    S.tests.eysenck.forEach((v, i) => { if (!v) return; answered++; const [k, sign] = D.EYSENCK_KEY[i % 12]; if (v === sign) sc[k]++; });
+    const done = answered === D.EYSENCK.length, M = D.EYSENCK_MID;
+    // Trục ngang HN, trục dọc KOD, tâm = 12; điểm đúng bằng 12 nằm trên ranh giới nên xét cả hai phía
+    const side = (v, hi, lo) => v > M ? [hi] : v < M ? [lo] : [hi, lo];
+    const Q = { iu: "uuTu", is: "binhThan", eu: "nongNay", es: "hangHai" }, types = [];
+    if (done) side(sc.HN, "e", "i").forEach(x => side(sc.KOD, "u", "s").forEach(y => types.push(Q[x + y])));
+    // Tài liệu không nêu ngưỡng cho S; theo cách dùng thang L của Eysenck, thành thật dưới 5/9 thì kết quả kém tin cậy
+    const lowS = done && sc.S <= 4;
+    return { sc, answered, done, types, lowS, usable: done && !lowS };
   }
-  function gardnerStats() {
-    let answered = 0; const sc = {};
-    D.GARDNER.forEach(g => { const a = S.tests.gardner[g.key]; answered += a.filter(x => x != null).length; sc[g.key] = a.reduce((p, c) => p + (c || 0), 0); });
-    return { sc, answered, done: answered === 24, top: Object.keys(sc).sort((a, b) => sc[b] - sc[a]).slice(0, 3) };
+  const eyName = ks => ks.map(k => D.EYSENCK_TYPES[k].name).join(" / ");
+  const eyText = es => es.done ? eyName(es.types) + ` (HN ${es.sc.HN}, KOD ${es.sc.KOD}, S ${es.sc.S}/9)` : es.answered ? `chưa đủ (${es.answered}/${D.EYSENCK.length})` : "–";
+  // MBTI: câu n thuộc cột (n − 1) % 7; a → chữ trước, b → chữ sau của chiều tương ứng
+  function mbtiStats() {
+    const res = {}; let answered = 0;
+    D.MBTI_DIMS.forEach(d => res[d.dim] = { a: 0, b: 0 });
+    S.tests.mbti.forEach((v, i) => { if (!v) return; answered++; res[D.MBTI_DIMS.find(d => d.cols.includes(i % 7)).dim][v]++; });
+    const letters = D.MBTI_DIMS.map(d => { const r = res[d.dim]; return r.letter = r.a > r.b ? d.a : r.b > r.a ? d.b : d.a + "/" + d.b; });
+    return { res, answered, done: answered === D.MBTI.length, type: letters.some(l => l.length > 1) ? letters.join(" · ") : letters.join("") };
   }
-  const gName = k => (D.GARDNER.find(g => g.key === k) || {}).name || k;
+  const mbtiText = ms => ms.done ? ms.type : ms.answered ? `chưa đủ (${ms.answered}/${D.MBTI.length})` : "–";
 
   /* ================= BƯỚC 3 – chấm ngành có truy vết ================= */
   const LONG_PROGRAMS = ["Y đa khoa", "Răng – Hàm – Mặt", "Dược học", "Kiến trúc"];
@@ -152,14 +163,18 @@
     return { sets, subjects: Object.keys(count).sort((a, b) => count[b] - count[a]) };
   }
   function careerAnalysis(c) {
-    const hs = hollandStats(), gs = gardnerStats(), p = S.profile;
+    const hs = hollandStats(), es = eysenckStats(), p = S.profile;
     const rows = [], notes = [];
-    if (hs.answered) { const w = [0.5, 0.3, 0.2]; const H = c.h.split("").reduce((s, L, i) => s + w[i] * (hs.sc[L] / 36), 0) * 35;
-      rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: `Ngành hợp nhóm ${c.h}; điểm: ${c.h.split("").map(L => L + " " + hs.sc[L] + "/36").join(", ")}`, v: H, max: 35 }); }
-    else rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: "Chưa làm trắc nghiệm – tạm tính mức trung bình", v: 17.5, max: 35 });
-    if (gs.answered) { const G = clamp(avg(c.g.map(k => (gs.sc[k] - 3) / 12)) ?? 0.5, 0, 1) * 15;
-      rows.push({ f: "Trí tuệ nổi trội (Gardner)", d: `Ngành cần: ${c.g.map(k => gName(k) + " " + gs.sc[k] + "/15").join(", ")}`, v: G, max: 15 }); }
-    else rows.push({ f: "Trí tuệ nổi trội (Gardner)", d: "Chưa làm trắc nghiệm – tạm tính mức trung bình", v: 7.5, max: 15 });
+    if (hs.answered) { const w = [0.5, 0.3, 0.2]; const H = c.h.split("").reduce((s, L, i) => s + w[i] * (hs.sc[L] / 36), 0) * 40;
+      rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: `Ngành hợp nhóm ${c.h}; điểm: ${c.h.split("").map(L => L + " " + hs.sc[L] + "/36").join(", ")}`, v: H, max: 40 }); }
+    else rows.push({ f: "Sở thích nghề nghiệp (Holland)", d: "Chưa làm trắc nghiệm – tạm tính mức trung bình", v: 20, max: 40 });
+    // Khí chất Eysenck: chỉ dùng gợi ý nghề có trong tài liệu (c.ey); ngành tài liệu không nhắc tới tính mức trung bình
+    const EF = "Khí chất (Eysenck)";
+    if (!es.done) rows.push({ f: EF, d: "Chưa làm đủ trắc nghiệm – tạm tính mức trung bình", v: 5, max: 10 });
+    else if (es.lowS) rows.push({ f: EF, d: `Điểm thành thật thấp (${es.sc.S}/9) – chưa dùng kết quả, tạm tính mức trung bình`, v: 5, max: 10 });
+    else if (!c.ey) rows.push({ f: EF, d: "Tài liệu Eysenck không nêu nhóm nghề này – tạm tính mức trung bình", v: 5, max: 10 });
+    else { const hit = es.types.filter(k => c.ey[k]);
+      rows.push({ f: EF, d: hit.length ? `Khí chất ${eyName(hit)}: tài liệu gợi ý “${c.ey[hit[0]]}”` : `Tài liệu gợi ý ngành này cho khí chất ${eyName(Object.keys(c.ey))}; ${T("bạn", "học sinh")} thuộc khí chất ${eyName(es.types)}`, v: hit.length ? 10 : 0, max: 10 }); }
     const ag = avg(c.thcs.map(k => grade(k)));
     rows.push({ f: "Kết quả học tập lớp 9", d: c.thcs.map(k => thcsName(k) + " " + gradeText(k)).join(", ") + (ag == null ? " – chưa có điểm, tạm tính" : ""), v: (ag == null ? 0.65 : ag / 10) * 25, max: 25 });
     const need = careerNeeds(c);
@@ -192,9 +207,9 @@
   }
   // Đặc điểm ở Bước 1–2 khớp với nhóm ngành
   function groupReasons(cs) {
-    const hs = hollandStats(), gs = gardnerStats(), p = S.profile, out = [];
+    const hs = hollandStats(), es = eysenckStats(), p = S.profile, out = [];
     if (hs.answered) { const L = hs.order.slice(0, 3).filter(x => cs.some(c => c.h.slice(0, 2).includes(x))); if (L.length) out.push("Sở thích Holland " + L.join(", ")); }
-    if (gs.answered) { const G = gs.top.filter(k => cs.some(c => c.g.includes(k))); if (G.length) out.push("Trí tuệ " + G.map(gName).join(", ")); }
+    if (es.usable) { const E = es.types.filter(k => cs.some(c => c.ey && c.ey[k])); if (E.length) out.push("Khí chất " + eyName(E) + " (Eysenck)"); }
     const strong = D.THCS.filter(s => !s.passFail && grade(s.key) != null && grade(s.key) >= 8 && cs.some(c => c.thcs.includes(s.key)));
     if (strong.length) out.push("Học tốt " + strong.slice(0, 3).map(s => thcsName(s.key).replace("KHTN – mạch ", "").replace("LS&ĐL – phân môn ", "").replace(" (Tiếng Anh)", "") + " " + gradeText(s.key)).join(", "));
     const liked = p.liked.filter(s => cs.some(c => careerNeeds(c).subjects.includes(s)));
@@ -210,11 +225,10 @@
 
   /* ================= BƯỚC 4 ================= */
   function subjInterest() {
-    const hs = hollandStats(), gs = gardnerStats(); const raw = {};
+    const hs = hollandStats(); const raw = {};
     D.SUBJECT_ORDER.forEach(s => {
       let v = 0.3;
       if (hs.answered) Object.keys(D.HOLLAND_SUBJ).forEach(L => v += 0.5 * (hs.sc[L] / 36) * (D.HOLLAND_SUBJ[L][s] || 0));
-      if (gs.answered) Object.keys(D.GARDNER_SUBJ).forEach(k => v += 0.3 * clamp((gs.sc[k] - 3) / 12, 0, 1) * (D.GARDNER_SUBJ[k][s] || 0));
       if (S.profile.liked.includes(s)) v += 0.35;
       raw[s] = v;
     });
@@ -270,10 +284,10 @@
     ["toan", "van", "anh"].forEach(k => { if (grade(k) == null) add(1, "Điểm lớp 9 – " + thcsName(k)); });
     if (["khtn_li", "khtn_hoa", "khtn_sinh"].every(k => grade(k) == null)) add(1, "Điểm lớp 9 – KHTN");
     if (!p.wish) add(1, "Nguyện vọng ngành/nghề");
-    const hs = hollandStats(), ps = persStats(), gs = gardnerStats();
+    const hs = hollandStats(), es = eysenckStats(), ms = mbtiStats();
     if (!hs.done) add(2, `Trắc nghiệm Holland (${hs.answered}/54)`);
-    if (!ps.done) add(2, `Tính cách 4 chiều (${ps.answered}/16)`);
-    if (!gs.done) add(2, `Đa trí tuệ (${gs.answered}/24)`);
+    if (!es.done) add(2, `Trắc nghiệm nhân cách Eysenck (${es.answered}/${D.EYSENCK.length})`);
+    if (!ms.done) add(2, `Trắc nghiệm tính cách MBTI (${ms.answered}/${D.MBTI.length})`);
     if (!Object.values(S.careerFb).includes("like")) add(3, "Chưa đánh dấu ngành “Thích”");
     if (!S.shortlist.length) add(4, "Chưa có phương án trong danh sách cân nhắc");
     if (!S.final.checks.talked) add(5, "Chưa xác nhận đã trao đổi với giáo viên, cha mẹ");
@@ -291,13 +305,13 @@
   }
   function schoolName() { const p = S.profile, sch = findSchool(p.schoolId); return sch ? sch.name : (p.schoolOther || ""); }
   function summaryText() {
-    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
+    const p = S.profile, hs = hollandStats(), es = eysenckStats(), ms = mbtiStats(), st = strengthLists();
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like").map(c => c.name);
     const fc = finalCombo(), lt = S.tracking[S.tracking.length - 1];
     return ["[MÃ HỒ SƠ – Cổng thông tin tư vấn học sinh]",
       "Ngày: " + new Date().toLocaleDateString("vi-VN") + " | Mã HS: " + (p.code || "–") + " | Vai trò: " + (ROLE_NAME[S.role] || "chưa chọn") + " | Trường: " + (schoolName() || "chưa nhập"),
       "B1: mạnh " + (st.strong.join(", ") || "–") + " | cần cố gắng " + (st.weak.join(", ") || "–") + " | nguyện vọng: " + (p.wish || "–"),
-      "B2: Holland " + (hs.answered ? hs.code + (hs.done ? "" : " (chưa đủ)") : "–") + " | 4 chiều " + (ps.answered ? ps.type : "–") + " | Gardner " + (gs.answered ? gs.top.map(gName).join(", ") : "–"),
+      "B2: Holland " + (hs.answered ? hs.code + (hs.done ? "" : " (chưa đủ)") : "–") + " | Eysenck " + eyText(es) + " | MBTI " + mbtiText(ms),
       "B3: ngành ưu tiên " + (liked.join(", ") || "chưa chọn"),
       "B4: danh sách cân nhắc " + (S.shortlist.length ? S.shortlist.map(k => k.split("|")[1].split("+").map(subjShort).join("-")).join("; ") : "–"),
       "B6: phương án chốt " + (fc ? comboLabel(fc.subjects) : "–"),
@@ -448,9 +462,9 @@
   /* ================= BƯỚC 2 ================= */
   function viewStep2() {
     const tab = S.ui.testTab;
-    const hs = hollandStats(), ps = persStats(), gs = gardnerStats();
-    const tabs = [["holland", "Holland", `${hs.answered}/54`], ["pers", "Tính cách 4 chiều", `${ps.answered}/16`], ["gardner", "Đa trí tuệ", `${gs.answered}/24`], ["result", "Báo cáo", ""]];
-    const body = tab === "pers" ? testPers(ps) : tab === "gardner" ? testGardner(gs) : tab === "result" ? reportH2() : testHolland(hs);
+    const hs = hollandStats(), es = eysenckStats(), ms = mbtiStats();
+    const tabs = [["holland", "Holland", `${hs.answered}/54`], ["eysenck", "Nhân cách Eysenck", `${es.answered}/${D.EYSENCK.length}`], ["mbti", "Tính cách MBTI", `${ms.answered}/${D.MBTI.length}`], ["result", "Báo cáo", ""]];
+    const body = tab === "eysenck" ? testEysenck(es) : tab === "mbti" ? testMbti(ms) : tab === "result" ? reportH2() : testHolland(hs);
     return `<section class="sheet">
       ${stepHead(2, "Đánh giá tâm lý – năng lực – sở thích", "Không có câu đúng hay sai. Kết quả chỉ để tham khảo, giúp hiểu bản thân hơn – không phải chẩn đoán.")}
       <div class="tabs" role="tablist">${tabs.map(([k, n, c]) => `<button type="button" class="tab" role="tab" aria-selected="${(tab || "holland") === k}" data-action="test-tab" data-tab="${k}">${n}${c ? `<span class="count">${c}</span>` : ""}</button>`).join("")}</div>
@@ -465,48 +479,81 @@
       ${D.HOLLAND.map(g => `<div class="q-group"><h4>Bảng ${g.key} – ${esc(g.name)} <span class="muted small">(${hs.sc[g.key]}/36)</span></h4>
         ${g.items.map((it, i) => `<div class="q"><span class="q-text">${i + 1}. ${esc(it)}</span><span class="scale" role="group" aria-label="${esc(it)}">${[0, 1, 2, 3, 4].map(v => `<button type="button" data-action="hol" data-k="${g.key}" data-i="${i}" data-v="${v}" data-fid="hol-${g.key}-${i}-${v}" aria-pressed="${S.tests.holland[g.key][i] === v}" title="${D.HOLLAND_SCALE[v]}">${v}</button>`).join("")}</span></div>`).join("")}
       </div>`).join("")}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="holland">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${hs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="pers">Tiếp: Tính cách 4 chiều</button>` : ""}</div>`;
+      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="holland">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${hs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="eysenck">Tiếp: Nhân cách Eysenck</button>` : ""}</div>`;
   }
-  function testPers(ps) {
-    return `<p>Mỗi dòng chọn câu gần với bạn hơn. <span class="muted small">Bản rút gọn tham khảo, không phải bộ MBTI® chính thức.</span></p>
-      ${prog(ps.answered, 16)}
-      ${D.PERSONALITY.map(p => `<div class="q-group"><h4>${esc(p.label)} (${p.a} / ${p.b})</h4>
-        ${p.items.map((pair, i) => `<div class="ab">${["a", "b"].map((x, j) => `<button type="button" data-action="pers" data-k="${p.dim}" data-i="${i}" data-v="${x}" data-fid="pers-${p.dim}-${i}-${x}" aria-pressed="${S.tests.pers[p.dim][i] === x}">${esc(pair[j])}</button>`).join("")}</div>`).join("")}
-      </div>`).join("")}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="pers">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${ps.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="gardner">Tiếp: Đa trí tuệ</button>` : ""}</div>`;
+  // Không hiện điểm từng thang khi đang làm (tài liệu MBTI dặn không xem bảng điểm trước khi làm xong)
+  function testEysenck(es) {
+    const N = D.EYSENCK.length;
+    return `<p>Chọn <b>Có</b> nếu câu hỏi đúng với bạn, <b>Không</b> nếu không đúng. Cố gắng dùng câu trả lời đầu tiên xuất hiện trong đầu, trả lời liên tục, trung thực, không bỏ câu nào. Với câu không quen thuộc, hãy trả lời theo cách nghĩ của mình. Tốc độ khoảng 2–3 câu một phút.</p>
+      ${prog(es.answered, N)}
+      <div class="q-group">${D.EYSENCK.map((it, i) => `<div class="q"><span class="q-text">${i + 1}. ${esc(it)}</span><span class="scale yn" role="group" aria-label="Câu ${i + 1}">${[["+", "Có", "y"], ["-", "Không", "n"]].map(([v, l, f]) => `<button type="button" data-action="ey" data-i="${i}" data-v="${v}" data-fid="ey-${i}-${f}" aria-pressed="${S.tests.eysenck[i] === v}">${l}</button>`).join("")}</span></div>`).join("")}</div>
+      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="eysenck">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${es.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="mbti">Tiếp: Tính cách MBTI</button>` : ""}</div>`;
   }
-  function testGardner(gs) {
-    return `<p>Mức độ giống bạn: <b>1</b> Hoàn toàn không giống … <b>5</b> Rất giống mình.</p>
-      ${prog(gs.answered, 24)}
-      ${D.GARDNER.map(g => `<div class="q-group"><h4>${esc(g.name)} <span class="muted small">(${gs.sc[g.key]}/15)</span></h4>
-        ${g.items.map((it, i) => `<div class="q"><span class="q-text">${esc(it)}</span><span class="scale" role="group" aria-label="${esc(it)}">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-action="gar" data-k="${g.key}" data-i="${i}" data-v="${v}" data-fid="gar-${g.key}-${i}-${v}" aria-pressed="${S.tests.gardner[g.key][i] === v}" title="${D.LIKERT5[v - 1]}">${v}</button>`).join("")}</span></div>`).join("")}
-      </div>`).join("")}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="gardner">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${gs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="result">Xem báo cáo</button>` : ""}</div>`;
+  function testMbti(ms) {
+    const N = D.MBTI.length;
+    return `<p>Mỗi câu chọn <b>một</b> phương án phù hợp hơn với bạn. Không có câu trả lời đúng hay sai; chỉ đọc và chọn, không nên phân tích quá nhiều vì sẽ khiến kết quả kém chính xác. Thời gian khoảng 20 phút.</p>
+      ${prog(ms.answered, N)}
+      ${D.MBTI.map(([q, a, b], i) => `<div class="mb-q"><p class="q-text"><b>Câu ${i + 1}.</b> ${esc(q)}</p><div class="ab" role="group" aria-label="Câu ${i + 1}">${[["a", a], ["b", b]].map(([x, t]) => `<button type="button" data-action="mbti" data-i="${i}" data-v="${x}" data-fid="mbti-${i}-${x}" aria-pressed="${S.tests.mbti[i] === x}">${x}. ${esc(t)}</button>`).join("")}</div></div>`).join("")}
+      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="mbti">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${ms.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="result">Xem báo cáo</button>` : ""}</div>`;
   }
   const bars = (rows, max) => `<div class="bars">${rows.map(([lab, val]) => `<div class="bar"><span>${esc(lab)}</span><span class="bar-track"><span class="bar-fill" style="width:${clamp(val / max * 100, 0, 100)}%"></span></span><span class="bar-val">${val}</span></div>`).join("")}</div>`;
+  // Biểu đồ khí chất như trong tài liệu: trục ngang HN, trục dọc KOD, thang 0–24, tâm 12
+  function eysenckChart(es) {
+    const X = v => 70 + clamp(v, 0, 24) / 24 * 200, Y = v => 230 - clamp(v, 0, 24) / 24 * 200;
+    const q = (x, y, k) => `<text x="${x}" y="${y}" class="ey-q${es.types.includes(k) ? " on" : ""}">${D.EYSENCK_TYPES[k].name}</text>`;
+    return `<figure class="ey-chart"><svg viewBox="0 0 356 256" role="img" aria-label="Biểu đồ khí chất: hướng ngoại ${es.sc.HN}, không ổn định ${es.sc.KOD}, thuộc ô ${esc(eyName(es.types))}">
+      <circle cx="170" cy="130" r="100" class="ey-ring"/>
+      <line x1="62" y1="130" x2="278" y2="130" class="ey-ax"/><line x1="170" y1="24" x2="170" y2="236" class="ey-ax"/>
+      <text x="170" y="16" class="ey-lab" text-anchor="middle">Không ổn định</text><text x="170" y="252" class="ey-lab" text-anchor="middle">Ổn định</text>
+      <text x="58" y="134" class="ey-lab" text-anchor="end">Hướng nội</text><text x="282" y="134" class="ey-lab">Hướng ngoại</text>
+      ${q(122, 84, "uuTu")}${q(218, 84, "nongNay")}${q(122, 184, "binhThan")}${q(218, 184, "hangHai")}
+      <circle cx="${X(es.sc.HN)}" cy="${Y(es.sc.KOD)}" r="6" class="ey-pt"/>
+    </svg></figure>`;
+  }
+  function eysenckReport(es) {
+    if (!es.answered) return `<p class="muted">Chưa làm.</p>`;
+    if (!es.done) return `<p class="muted">Mới trả lời ${es.answered}/${D.EYSENCK.length} câu – cần trả lời đủ để tính kết quả.</p>`;
+    const typeHTML = k => { const t = D.EYSENCK_TYPES[k]; return `<p class="small"><b>Khí chất ${esc(t.name)}</b> (${esc(t.axis)}):</p><ul class="small">${t.traits.map(x => `<li>${esc(x)}</li>`).join("")}</ul><p class="small"><b>Công việc phù hợp (theo tài liệu):</b> ${esc(t.jobs)}.</p>`; };
+    return `<div class="code-big" style="font-size:1.8rem">${esc(eyName(es.types))}</div>
+      <p class="small muted">HN (hướng ngoại) ${es.sc.HN}/25 · KOD (không ổn định) ${es.sc.KOD}/25 · S (thành thật) ${es.sc.S}/9</p>
+      ${eysenckChart(es)}
+      ${es.lowS ? `<div class="callout warn"><p>Điểm thành thật thấp (${es.sc.S}/9): có thể đã chọn theo điều “nên như thế” hơn là điều thật sự đúng với ${T("bạn", "học sinh")}. Nên làm lại hoặc trao đổi với giáo viên; kết quả này chưa được dùng để chấm ngành.</p></div>` : ""}
+      ${es.types.length > 1 ? `<p class="small">Điểm nằm đúng trên ranh giới (${D.EYSENCK_MID}) nên mang nét của ${es.types.length} kiểu khí chất.</p>` : ""}
+      ${es.types.map(typeHTML).join("")}
+      <p class="small muted">Không có kiểu khí chất tốt hay xấu; mô tả chỉ là xu hướng và có thể thay đổi qua rèn luyện, hoàn cảnh.</p>`;
+  }
+  function mbtiReport(ms) {
+    if (!ms.answered) return `<p class="muted">Chưa làm.</p>`;
+    if (!ms.done) return `<p class="muted">Mới trả lời ${ms.answered}/${D.MBTI.length} câu – cần trả lời đủ để tính kết quả.</p>`;
+    return `<div class="code-big" style="font-size:1.8rem">${esc(ms.type)}</div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Chiều</th><th>Điểm</th><th>Nghiêng về</th></tr></thead><tbody>
+        ${D.MBTI_DIMS.map(d => { const r = ms.res[d.dim]; return `<tr><td>${esc(d.label)}</td><td class="nowrap">${d.a} ${r.a} – ${d.b} ${r.b}</td><td>${r.letter.length > 1 ? `cân bằng giữa ${d.a} và ${d.b}` : esc(D.MBTI_DESC[r.letter])}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      <p class="small muted">Tài liệu MBTI chỉ hướng dẫn cách tính 4 chữ cái, không kèm gợi ý ngành nghề, nên kết quả này dùng để hiểu bản thân và không tính vào điểm ngành. Đây là bản trắc nghiệm phổ biến, không phải bộ MBTI® chính thức.</p>`;
+  }
   function reportH2() {
-    const hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
-    if (!hs.answered && !ps.answered && !gs.answered) return `<div class="callout info"><p>Chưa có dữ liệu. Hãy bắt đầu với tab Holland.</p></div>`;
+    const hs = hollandStats(), es = eysenckStats(), ms = mbtiStats(), st = strengthLists();
+    if (!hs.answered && !es.answered && !ms.answered) return `<div class="callout info"><p>Chưa có dữ liệu. Hãy bắt đầu với tab Holland.</p></div>`;
     const top = hs.order[0] ? D.HOLLAND.find(g => g.key === hs.order[0]) : null;
     const groups = suitableGroups().map(x => x.g);
+    const flags = [];
+    if (hs.flat) flags.push("Điểm các nhóm sở thích Holland khá sát nhau hoặc đều thấp – nên gặp giáo viên tư vấn để khám phá thêm.");
+    if (es.lowS) flags.push("Điểm thành thật của trắc nghiệm Eysenck thấp – nên làm lại hoặc trao đổi với giáo viên.");
     return `<h3>Báo cáo tâm lý – năng lực (H2)</h3><p class="muted small">Chỉ mang tính tham khảo.</p>
       <div class="grid-2">
         <div><h4>1. Sở thích nghề nghiệp (Holland)</h4>
           ${hs.answered ? `<div class="code-big">${hs.code}</div>${hs.done ? "" : `<p class="small muted">Mới trả lời ${hs.answered}/54 câu – kết quả chưa đầy đủ.</p>`}${bars(D.HOLLAND.map(g => [g.key + " – " + g.name.split("–")[1].trim(), hs.sc[g.key]]), 36)}
           ${top ? `<p class="small" style="margin-top:10px"><b>${esc(top.name)}:</b> ${esc(top.desc)}</p><p class="small"><b>Ngành nghề gợi ý:</b> ${esc(top.jobs)}</p>` : ""}` : `<p class="muted">Chưa làm.</p>`}
         </div>
-        <div><h4>2. Xu hướng tính cách 4 chiều</h4>
-          ${ps.answered ? `<div class="code-big" style="font-size:1.8rem">${esc(ps.type)}</div><ul class="small">${D.PERSONALITY.map(p => { const r = ps.res[p.dim]; const L = r.a > r.b ? p.a : r.b > r.a ? p.b : null; return `<li>${esc(p.label)}: ${L ? esc(D.PERSONALITY_DESC[L]) : "cân bằng giữa " + p.a + " và " + p.b}</li>`; }).join("")}</ul>` : `<p class="muted">Chưa làm.</p>`}
-          <h4 style="margin-top:16px">3. Trí thông minh nổi trội (Gardner)</h4>
-          ${gs.answered ? `${bars(D.GARDNER.map(g => [g.name, gs.sc[g.key]]), 15)}<p class="small" style="margin-top:8px"><b>Nổi trội:</b> ${esc(gs.top.map(gName).join(", "))}</p>` : `<p class="muted">Chưa làm.</p>`}
-        </div>
+        <div><h4>2. Nhân cách (Eysenck)</h4>${eysenckReport(es)}</div>
       </div>
       <hr class="rule">
       <div class="grid-2">
+        <div><h4>3. Tính cách (MBTI)</h4>${mbtiReport(ms)}</div>
         <div><h4>4. Năng lực học tập (từ Bước 1)</h4><p class="small"><b>Mạnh:</b> ${esc(st.strong.join(", ") || "–")}<br><b>Cần cố gắng:</b> ${esc(st.weak.join(", ") || "–")}</p>
-          <h4>5. Nhóm ngành gợi ý ban đầu</h4><p class="small">${esc(groups.join(", "))}</p></div>
-        <div><h4>6. Có cần giáo viên tư vấn thêm?</h4>
-          ${hs.flat ? `<div class="callout warn"><p>Điểm các nhóm sở thích khá sát nhau hoặc đều thấp – nên gặp giáo viên tư vấn để khám phá thêm.</p></div>` : `<p class="small">${hs.done ? "Chưa thấy dấu hiệu cần hỗ trợ thêm." : "Hoàn thành Holland để đánh giá."}</p>`}
+          <h4>5. Nhóm ngành gợi ý ban đầu</h4><p class="small">${esc(groups.join(", "))}</p>
+          <h4>6. Có cần giáo viên tư vấn thêm?</h4>
+          ${flags.length ? flags.map(f => `<div class="callout warn"><p>${f}</p></div>`).join("") : `<p class="small">${hs.done ? "Chưa thấy dấu hiệu cần hỗ trợ thêm." : "Hoàn thành Holland để đánh giá."}</p>`}
         </div>
       </div>`;
   }
@@ -566,18 +613,18 @@
 
   // Sơ đồ liên kết 3 cột: điểm mạnh & sở thích → nhóm ngành → ngành
   function diagramHTML(top) {
-    const hs = hollandStats(), gs = gardnerStats(), p = S.profile;
+    const hs = hollandStats(), es = eysenckStats(), p = S.profile;
     const left = [];
     if (hs.answered) hs.order.slice(0, 3).forEach(L => left.push({ label: "Holland " + L, kind: "h", L }));
-    if (gs.answered) gs.top.slice(0, 2).forEach(k => left.push({ label: gName(k), kind: "g", k }));
+    if (es.usable) left.push({ label: "Khí chất " + eyName(es.types), kind: "e" });
     D.THCS.filter(s => !s.passFail && grade(s.key) != null && grade(s.key) >= 8).sort((a, b) => grade(b.key) - grade(a.key)).slice(0, 3)
       .forEach(s => left.push({ label: s.name.replace("KHTN – mạch ", "").replace("LS&ĐL – phân môn ", "").replace(" (Tiếng Anh)", "") + " " + fmt(grade(s.key)), kind: "s", key: s.key }));
     p.liked.slice(0, 2).forEach(s => left.push({ label: "Thích " + subjName(s), kind: "l", s }));
     if (!left.length || !top.length) return `<div class="callout info"><p>Chưa đủ dữ liệu để vẽ sơ đồ. Hãy nhập điểm ở Bước 1 và làm trắc nghiệm ở Bước 2.</p></div>`;
     const w = [0.5, 0.3, 0.2];
     const contrib = (node, c) => {
-      if (node.kind === "h") { const i = c.h.indexOf(node.L); return i < 0 ? 0 : w[i] * hs.sc[node.L] / 36 * 35; }
-      if (node.kind === "g") return c.g.includes(node.k) ? clamp((gs.sc[node.k] - 3) / 12, 0, 1) * 15 / c.g.length : 0;
+      if (node.kind === "h") { const i = c.h.indexOf(node.L); return i < 0 ? 0 : w[i] * hs.sc[node.L] / 36 * 40; }
+      if (node.kind === "e") return c.ey && es.types.some(k => c.ey[k]) ? 10 : 0;
       if (node.kind === "s") return c.thcs.includes(node.key) ? grade(node.key) / 10 * 25 / c.thcs.length : 0;
       if (node.kind === "l") return careerNeeds(c).subjects.includes(node.s) ? 5 : 0;
       return 0;
@@ -711,7 +758,7 @@
     return q;
   }
   function viewStep5() {
-    const p = S.profile, hs = hollandStats(), ps = persStats(), gs = gardnerStats(), st = strengthLists();
+    const p = S.profile, hs = hollandStats(), es = eysenckStats(), ms = mbtiStats(), st = strengthLists();
     const liked = D.CAREERS.filter(c => S.careerFb[c.name] === "like");
     const fc = finalCombo();
     return `<section class="sheet">
@@ -721,7 +768,7 @@
         <h3>PHIẾU TÓM TẮT TƯ VẤN CHỌN MÔN LỚP 10 (H5)</h3>
         <p class="small">Học sinh: <b>${esc(p.nickname || "……")}</b> · Mã HS: <b>${esc(p.code || "……")}</b> · Lớp: ${esc(p.className || "……")} · Trường: <b>${esc(schoolName() || "……")}</b> · Ngày lập: ${new Date().toLocaleDateString("vi-VN")}</p>
         <h4>1. Học tập</h4><ul><li>Môn mạnh: ${esc(st.strong.join(", ") || "–")}</li><li>Cần cố gắng: ${esc(st.weak.join(", ") || "–")}</li><li>Năng khiếu/giải thưởng: ${esc(p.talents || "–")}</li></ul>
-        <h4>2. Tâm lý – sở thích (tham khảo)</h4><ul><li>Holland: ${hs.answered ? "<b>" + hs.code + "</b>" + (hs.done ? "" : " (chưa đủ câu)") : "–"}</li><li>Tính cách 4 chiều: ${ps.answered ? esc(ps.type) : "–"}</li><li>Trí tuệ nổi trội: ${gs.answered ? esc(gs.top.map(gName).join(", ")) : "–"}</li><li>Môn thích: ${esc(p.liked.map(subjName).join(", ") || "–")} · Không muốn học: ${esc(p.disliked.map(subjName).join(", ") || "–")}</li></ul>
+        <h4>2. Tâm lý – sở thích (tham khảo)</h4><ul><li>Holland: ${hs.answered ? "<b>" + hs.code + "</b>" + (hs.done ? "" : " (chưa đủ câu)") : "–"}</li><li>Nhân cách Eysenck: ${esc(eyText(es))}</li><li>Tính cách MBTI: ${esc(mbtiText(ms))}</li><li>Môn thích: ${esc(p.liked.map(subjName).join(", ") || "–")} · Không muốn học: ${esc(p.disliked.map(subjName).join(", ") || "–")}</li></ul>
         <h4>3. Nguyện vọng & ngành ưu tiên</h4><ul><li>Học sinh: ${esc(p.wish || "–")} · Gia đình: ${esc(p.familyWish || "–")}</li><li>Ngành ưu tiên: ${esc(liked.map(c => c.name + " (" + careerAnalysis(c).total + "%)").join(", ") || "chưa chọn")}</li></ul>
         <h4>4. Phương án đang cân nhắc</h4>
         ${S.shortlist.length ? `<ul>${S.shortlist.map(k => { const [scId, ck] = k.split("|"); const a = analyzeCombo(ck.split("+"), null, findSchool(scId)); return `<li>${esc(comboLabel(ck.split("+")))} – ${a.total}/100 – mở ${esc(a.nonTrivial.join(", ") || "–")}</li>`; }).join("")}</ul>` : "<p class='small'>Chưa có.</p>"}
@@ -1131,8 +1178,8 @@
         save(); render(); break; }
       case "test-tab": S.ui.testTab = ds.tab; save(); render({ top: true }); break;
       case "hol": S.tests.holland[ds.k][+ds.i] = +ds.v; save(); render(); break;
-      case "pers": S.tests.pers[ds.k][+ds.i] = ds.v; save(); render(); break;
-      case "gar": S.tests.gardner[ds.k][+ds.i] = +ds.v; save(); render(); break;
+      case "ey": S.tests.eysenck[+ds.i] = ds.v; save(); render(); break;
+      case "mbti": S.tests.mbti[+ds.i] = ds.v; save(); render(); break;
       case "fill-demo": fillDemo(ds.test); save(); render(); toast("Đã điền ngẫu nhiên để thử demo"); break;
       case "cfb": S.careerFb[ds.name] = S.careerFb[ds.name] === ds.v ? undefined : ds.v; save(); render(); break;
       case "pick-group": S.careerGroup = S.careerGroup === ds.g ? "" : ds.g; save(); render(); break;
@@ -1185,8 +1232,8 @@
   function fillDemo(test) {
     const r = n => Math.floor(Math.random() * n);
     if (test === "holland") D.HOLLAND.forEach((g, gi) => { const bias = [3, 2, 1, 1, 2, 1][(gi + r(6)) % 6]; S.tests.holland[g.key] = g.items.map(() => clamp(bias + r(3) - 1, 0, 4)); });
-    if (test === "pers") D.PERSONALITY.forEach(p => S.tests.pers[p.dim] = p.items.map(() => r(2) ? "a" : "b"));
-    if (test === "gardner") D.GARDNER.forEach(g => S.tests.gardner[g.key] = g.items.map(() => 1 + r(5)));
+    if (test === "eysenck") S.tests.eysenck = D.EYSENCK.map(() => r(2) ? "+" : "-");
+    if (test === "mbti") S.tests.mbti = D.MBTI.map(() => r(2) ? "a" : "b");
   }
   function onTrackSubmit(e) {
     e.preventDefault();

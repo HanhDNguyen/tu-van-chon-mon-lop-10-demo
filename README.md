@@ -22,7 +22,7 @@ Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh
 |---|---|
 | Trang đầu | Chọn vai trò (học sinh / phụ huynh / giáo viên) để xưng hô; bảng 9 môn bấm thử để xem tổ hợp xét tuyển nào được mở; nhập mã hồ sơ |
 | 1. Dữ liệu nền | Mã học sinh (nhập tay), thông tin chung, Âm nhạc/Mĩ thuật chấm Đạt/Chưa đạt, điểm lớp 9, môn thích/không thích, điều kiện (không bắt buộc), nguyện vọng → **Hồ sơ H1** |
-| 2. Trắc nghiệm | Holland 54 câu, tính cách 4 chiều 16 câu, Gardner 24 câu → **Báo cáo H2**, cảnh báo khi cần giáo viên tư vấn thêm |
+| 2. Trắc nghiệm | Holland 54 câu, nhân cách Eysenck 59 câu (4 kiểu khí chất), tính cách MBTI 70 câu → **Báo cáo H2**, cảnh báo khi cần giáo viên tư vấn thêm (cách chấm: [docs/TRAC-NGHIEM-BUOC-2.md](docs/TRAC-NGHIEM-BUOC-2.md)) |
 | 3. Ngành nghề | 36 ngành xếp theo mức phù hợp (dùng toàn bộ dữ liệu Bước 1–2), bảng “Vì sao gợi ý ngành này?”, sơ đồ liên kết, lọc theo nhóm, đánh dấu Thích/Phân vân/Không hợp → **Danh sách H3** |
 | 4. Tổ hợp tại trường | Chỉ gợi ý từ danh sách tổ hợp của trường; loại tổ hợp có môn không muốn học; xếp phù hợp nhất lên đầu; chấm 4 tiêu chí (100 điểm); thêm trường bằng link website (qua máy chủ) hoặc dán nội dung/nhập tay → **H4** |
 | 5. Tư vấn GV – CMHS | **Phiếu tóm tắt H5** in được hoặc lưu PDF, có câu hỏi gợi ý tự sinh theo dữ liệu |

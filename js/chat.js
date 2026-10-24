@@ -60,7 +60,7 @@
     const base = {
       0: ["Phải chọn mấy môn?", "Môn nào bắt buộc?", "Tổ hợp A00 gồm gì?"],
       1: ["Vì sao cần điểm lớp 9?", "Phải chọn mấy môn?"],
-      2: ["Holland là gì?", "Tính cách 4 chiều là gì?", "Trắc nghiệm có chính xác không?"],
+      2: ["Holland là gì?", "Eysenck và MBTI là gì?", "Trắc nghiệm có chính xác không?"],
       3: ["Ngành Y cần học môn gì?", "Ngành CNTT cần môn gì?", "Ngành Luật cần môn gì?"],
       4: ["Nên chọn tổ hợp nào?", "Chuyên đề học tập là gì?", "Môn nào được thi tốt nghiệp?"],
       5: ["Nói chuyện với bố mẹ thế nào?", "Nên chọn tổ hợp nào?"],
@@ -158,10 +158,12 @@
 
     if (has(t, ["holland"]))
       return "Trắc nghiệm Holland chia sở thích nghề nghiệp thành 6 nhóm: R (thực tế), I (nghiên cứu), A (nghệ sĩ), S (xã hội), E (dám nghĩ dám làm), C (quy củ). 3 nhóm điểm cao nhất tạo thành mã Holland, dùng để gợi ý ngành phù hợp. Làm ở Bước 2, khoảng 15 phút.";
+    if (has(t, ["eysenck", "khi chat", "nhan cach"]) && has(t, ["mbti"]))
+      return "Bước 2 có 2 trắc nghiệm tính cách:\n• Nhân cách Eysenck (59 câu Có/Không): đo mức hướng ngoại (HN), mức ổn định cảm xúc (KOD) và độ thành thật (S), từ đó xếp vào 1 trong 4 kiểu khí chất: Ưu tư, Bình thản, Nóng nảy, Hăng hái, kèm gợi ý công việc theo tài liệu.\n• Tính cách MBTI (70 câu a/b): cho 4 chữ cái theo 4 chiều E/I, S/N, T/F, J/P, chỉ để hiểu bản thân, không tính vào điểm ngành.\nCả hai chỉ mang tính tham khảo.";
+    if (has(t, ["eysenck", "khi chat", "nhan cach"]))
+      return "Trắc nghiệm nhân cách Eysenck gồm 59 câu trả lời Có/Không. Kết quả gồm điểm hướng ngoại (HN), không ổn định cảm xúc (KOD) và thành thật (S); vị trí trên biểu đồ HN–KOD (tâm 12) cho biết khí chất: Ưu tư, Bình thản, Nóng nảy hoặc Hăng hái, kèm gợi ý công việc của tài liệu. Không có khí chất tốt hay xấu.";
     if (has(t, ["mbti", "tinh cach"]))
-      return "Phần tính cách 4 chiều là bản rút gọn tham khảo (không phải bộ MBTI® chính thức), giúp hiểu cách bạn nạp năng lượng, tiếp nhận thông tin, ra quyết định và tổ chức công việc. Không dùng để kết luận nghề.";
-    if (has(t, ["gardner", "da tri tue", "tri thong minh"]))
-      return "Thuyết đa trí tuệ của Gardner gồm 8 loại: ngôn ngữ, logic – toán, không gian, vận động, âm nhạc, giao tiếp, nội tâm, thiên nhiên. Bản demo dùng 24 câu rút gọn để tìm 3 trí tuệ nổi trội.";
+      return "Trắc nghiệm tính cách MBTI (bản phổ biến, không phải bộ MBTI® chính thức) gồm 70 câu chọn a/b, cho 4 chữ cái: E/I (nguồn năng lượng), S/N (cách tiếp nhận thông tin), T/F (cách ra quyết định), J/P (cách tổ chức công việc). Chỉ dùng để hiểu bản thân, không dùng để kết luận nghề.";
     if (has(t, ["chinh xac", "tin duoc khong", "dung khong"]))
       return "Các trắc nghiệm chỉ mang tính tham khảo, giúp gợi mở chứ không quyết định thay. Nên kết hợp với kết quả học tập thực tế, trải nghiệm và trao đổi với thầy cô, cha mẹ.";
     if (has(t, ["diem lop 9", "vi sao can diem"]))

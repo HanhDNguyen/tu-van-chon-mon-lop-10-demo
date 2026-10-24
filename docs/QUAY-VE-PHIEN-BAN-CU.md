@@ -9,6 +9,7 @@ Xem các nhánh: https://github.com/HanhDNguyen/tu-van-chon-mon-lop-10-demo/bran
 |---|---|
 | `phien-ban/v1.0-offline` | Bản Offline ngày 13/10/2026: có TPB, trang quản trị demo (`admin/`), module `holland.js`, gửi hồ sơ ở Bước 5 |
 | `phien-ban/v2.0` | Bản 20/10/2026: bỏ TPB; Mã học sinh; Âm nhạc/Mĩ thuật Đạt/Chưa đạt; giải thích “Vì sao gợi ý ngành” + sơ đồ liên kết; Bước 4 chỉ dùng tổ hợp của trường, loại môn không muốn học, lấy tổ hợp từ link web trường; Lưu hồ sơ; Khu vực giáo viên (danh mục hồ sơ, nhập Google Form); máy chủ có đăng nhập giáo viên |
+| `phien-ban/v2.1` | Bản 24/10/2026 (trước khi đổi trắc nghiệm Bước 2): còn “Tính cách 4 chiều” 16 câu và “Đa trí tuệ Gardner” 24 câu; Bước 3 chỉ hiện nhóm ngành phù hợp; Bước 4 nhập tổ hợp của trường tại chỗ; nút sơ đồ triển khai |
 
 ## Cách 1 – Không cần dùng lệnh
 1. Tải file zip của phiên bản muốn quay về:
