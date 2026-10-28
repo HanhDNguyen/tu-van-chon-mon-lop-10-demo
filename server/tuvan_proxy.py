@@ -704,13 +704,23 @@ class ServiceH(H):
     def origin_ok(self, origin):
         return True
 
+    def _drain_body(self):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 0:
+                self.rfile.read(min(length, 1048576))
+        except Exception:
+            pass
+
     def check_service_auth(self):
         path = self.path.split("?")[0]
         if not path.startswith("/api/"):
+            self._drain_body()
             self._json(404, {"error": "cổng dịch vụ chỉ phục vụ /api/*"})
             return False
         st = self.headers.get("X-Service-Token", "")
         if not BOT_SERVICE_TOKEN or not hmac.compare_digest(st.encode("utf-8"), BOT_SERVICE_TOKEN.encode("utf-8")):
+            self._drain_body()
             self._json(401, {"error": "khoá dịch vụ không hợp lệ"})
             return False
         return True
