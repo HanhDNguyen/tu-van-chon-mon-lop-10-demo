@@ -1,0 +1,12 @@
+# Bí mật và dữ liệu – không bao giờ đưa lên GitHub
+server/tuvan.env
+*.env
+!*.env.example
+web-demo-data/
+*.bundle
+
+# Tệp sinh tự động
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

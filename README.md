@@ -54,6 +54,9 @@ server/
 - Sửa ngành nghề, trường, câu hỏi: chỉnh trong `js/data.js`.
 - Trường minh họa A, B **không phải dữ liệu thật**. Muốn thêm trường thật, nhập ở ô “Nhập tổ hợp của trường THPT” ngay tại Bước 4 (hoặc nút “Lấy từ website / dán thông báo của trường…”) (cú pháp nhập tay: `docs/QUY-UOC-NHAP-TO-HOP.md`), hoặc thêm vào `SAMPLE_SCHOOLS`.
 
+## Kế hoạch tiếp theo: bot Telegram cho giáo viên + khảo sát tại nhà
+Giáo viên tạo link/QR → cha mẹ và học sinh làm Bước 1–2 tại nhà trên điện thoại → giáo viên nhận thông báo qua bot và tư vấn ngay hôm sau. Thiết kế, quy tắc an toàn dữ liệu và prompt bàn giao từng giai đoạn: `docs/BAN-GIAO-BOT-TELEGRAM.md`.
+
 ## Gắn bot Telegram / máy chủ AI
 Web đã chừa sẵn chỗ gắn. Khi có máy chủ AI (có thể dùng chung với bot Telegram), chỉ cần điền địa chỉ vào `js/config.js`:
 ```js
