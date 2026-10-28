@@ -1,0 +1,3 @@
+# Phụ thuộc cho Bot Telegram giáo viên (server/tuvan_bot.py)
+# Thư viện thuần Python, sinh mã QR PNG không cần Pillow hay C-extensions
+segno>=1.6.0
