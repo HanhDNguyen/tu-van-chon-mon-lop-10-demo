@@ -77,7 +77,9 @@ pip install -r server/requirements-bot.txt
 | Lệnh | Cú pháp | Ví dụ | Ý nghĩa |
 |---|---|---|---|
 | `/start`, `/trogiup` | `/trogiup` | `/trogiup` | Xem hướng dẫn sử dụng và danh sách lệnh. |
-| `/taolink` | `/taolink <mã HS> [lớp]` | `/taolink HS001 10A1` | Tạo link và mã QR để gửi cho học sinh/phụ huynh. Link có hạn 7 ngày. |
+| `/taolink` | `/taolink <mã HS> [lớp]` | `/taolink HS001 10A1` | Tạo link và mã QR cho 1 học sinh. Link có hạn 7 ngày. |
+| `/taolop` | `/taolop <lớp> <từ_mã>-<đến_mã>` | `/taolop 10A1 HS001-HS045` | Tạo mã mời cả lớp (tối đa 60 mã), gửi lại 1 file PDF in A4 (mỗi trang 8 ô QR để cắt phát) + 1 file CSV link. |
+| *Gửi file .csv* | Kèm file `.csv` (cột `ma_hs,lop`) | Kéo thả file `10A1.csv` | Bot tự động nhận diện và xuất ngay 1 file PDF in A4 + 1 file CSV link khảo sát cả lớp. |
 | `/danhsach` | `/danhsach [lớp]` | `/danhsach 10A1` | Liệt kê tất cả mã mời, trạng thái đã nộp hoặc chưa nộp. |
 | `/chuanop` | `/chuanop [lớp]` | `/chuanop 10A1` | Lọc nhanh danh sách các học sinh chưa nộp bài. |
 | `/hoso` | `/hoso <mã HS>` | `/hoso HS001` | Xem tóm tắt kết quả trắc nghiệm (Holland, Eysenck, MBTI), số mục thiếu và link mở web. |

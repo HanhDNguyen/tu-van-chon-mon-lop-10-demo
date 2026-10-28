@@ -12,6 +12,7 @@ import io
 import shutil
 import time
 import os
+import re
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -24,6 +25,7 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
     sent_photos = []
     sent_documents = []
     updates_queue = []
+    file_storage = {}
 
     @classmethod
     def reset(cls):
@@ -31,6 +33,7 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
         cls.sent_photos = []
         cls.sent_documents = []
         cls.updates_queue = []
+        cls.file_storage = {}
 
     def log_message(self, fmt, *args):
         pass
@@ -43,6 +46,19 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def do_GET(self):
+        path = self.path
+        if "/file/bot" in path:
+            fname = path.split("/")[-1]
+            content = MockTelegramHandler.file_storage.get(fname, b"")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        return self._json(404, {"ok": False, "description": "not found"})
+
     def do_POST(self):
         path = self.path
         length = int(self.headers.get("Content-Length", 0) or 0)
@@ -53,6 +69,17 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
             updates = list(self.updates_queue)
             self.updates_queue.clear()
             return self._json(200, {"ok": True, "result": updates})
+
+        if "getFile" in path:
+            data = json.loads(body.decode("utf-8")) if body else {}
+            fid = data.get("file_id", "test_file_id")
+            return self._json(200, {
+                "ok": True,
+                "result": {
+                    "file_id": fid,
+                    "file_path": f"documents/{fid}.csv"
+                }
+            })
 
         if "sendMessage" in path:
             data = json.loads(body.decode("utf-8")) if body else {}
@@ -143,6 +170,28 @@ class TestTuVanBot(unittest.TestCase):
                 "text": text
             }
         }
+
+    def _make_doc_update(self, file_id, file_name, from_id=None, chat_type="private"):
+        return {
+            "update_id": int(time.time() * 1000) % 1000000,
+            "message": {
+                "message_id": 1,
+                "from": {"id": from_id or self.teacher_id, "first_name": "Teacher"},
+                "chat": {"id": from_id or self.teacher_id, "type": chat_type},
+                "document": {
+                    "file_id": file_id,
+                    "file_name": file_name,
+                    "mime_type": "text/csv"
+                }
+            }
+        }
+
+    def _extract_document(self, doc_entry):
+        body = doc_entry["body"]
+        m = re.search(rb'filename="([^"]+)".*?\r\n\r\n(.*?)\r\n------TuVanBoundary', body, re.DOTALL)
+        if m:
+            return m.group(1).decode("utf-8", errors="replace"), m.group(2)
+        return "", b""
 
     # 1. Từ chối người lạ (ID không trong TEACHER_TELEGRAM_IDS)
     def test_01_unauthorized_user_rejected(self):
@@ -357,6 +406,123 @@ class TestTuVanBot(unittest.TestCase):
         self.assertIn("HS009", notif["text"])
         self.assertIn("10A2", notif["text"])
         self.assertIn("2 mục", notif["text"])
+
+    # 12. Tạo mã mời cả lớp (/taolop 10A1 HS001-HS045) và xuất PDF + CSV
+    def test_12_taolop_batch_and_pdf(self):
+        u = self._make_msg_update("/taolop 10A1 HS001-HS045")
+        self.bot.handle_update(u)
+
+        # Bot phải gửi 2 documents: 1 PDF và 1 CSV
+        self.assertEqual(len(MockTelegramHandler.sent_documents), 2)
+
+        pdf_doc = None
+        csv_doc = None
+        for d in MockTelegramHandler.sent_documents:
+            fname, fbytes = self._extract_document(d)
+            if fname.lower().endswith(".pdf"):
+                pdf_doc = (fname, fbytes)
+            elif fname.lower().endswith(".csv"):
+                csv_doc = (fname, fbytes)
+
+        self.assertIsNotNone(pdf_doc, "Không tìm thấy file PDF được gửi từ bot")
+        self.assertIsNotNone(csv_doc, "Không tìm thấy file CSV được gửi từ bot")
+
+        # Kiểm tra file PDF
+        pdf_name, pdf_bytes = pdf_doc
+        self.assertIn("10A1", pdf_name)
+        # 45 mã / 8 ô mỗi trang = 6 trang
+        page_count = len(re.findall(rb"/Type\s*/Page\b", pdf_bytes))
+        self.assertEqual(page_count, 6, f"PDF phải có đúng 6 trang (thực tế: {page_count})")
+
+        # Bảo mật: Không in tên học sinh, không chứa dữ liệu riêng tư
+        self.assertNotIn(b"health", pdf_bytes.lower())
+        self.assertNotIn(b"econ", pdf_bytes.lower())
+
+        # Kiểm tra file CSV
+        csv_name, csv_bytes = csv_doc
+        self.assertIn("10A1", csv_name)
+        csv_text = csv_bytes.decode("utf-8-sig")
+        lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 46, "CSV phải có 1 dòng header + 45 dòng dữ liệu học sinh")
+        self.assertEqual(lines[0], "ma_hs,lop,link,het_han")
+        self.assertTrue(lines[1].startswith("HS001,10A1,"))
+        self.assertTrue(lines[-1].startswith("HS045,10A1,"))
+
+        # Kiểm tra tin nhắn xác nhận
+        self.assertGreater(len(MockTelegramHandler.sent_messages), 0)
+        confirm = MockTelegramHandler.sent_messages[-1]["text"]
+        self.assertIn("45 mã", confirm)
+        self.assertIn("10A1", confirm)
+
+    # 13. Kiểm tra các lỗi cú pháp và giới hạn của /taolop
+    def test_13_taolop_validation(self):
+        # Thiếu tham số
+        u = self._make_msg_update("/taolop")
+        self.bot.handle_update(u)
+        self.assertIn("Cú pháp", MockTelegramHandler.sent_messages[-1]["text"])
+
+        # Số bắt đầu > số kết thúc
+        MockTelegramHandler.reset()
+        u = self._make_msg_update("/taolop 10A1 HS050-HS001")
+        self.bot.handle_update(u)
+        self.assertIn("lớn hơn số kết thúc", MockTelegramHandler.sent_messages[-1]["text"])
+
+        # Vượt quá 60 mã
+        MockTelegramHandler.reset()
+        u = self._make_msg_update("/taolop 10A1 HS001-HS070")
+        self.bot.handle_update(u)
+        self.assertIn("vượt quá giới hạn tối đa 60", MockTelegramHandler.sent_messages[-1]["text"])
+
+        # Tiền tố không khớp
+        MockTelegramHandler.reset()
+        u = self._make_msg_update("/taolop 10A1 HS001-AB045")
+        self.bot.handle_update(u)
+        self.assertIn("không khớp", MockTelegramHandler.sent_messages[-1]["text"])
+
+    # 14. Gửi file CSV trực tiếp vào bot
+    def test_14_csv_upload_batch(self):
+        csv_content = "ma_hs,lop\n" + "\n".join([f"HS{i:03d},10A2" for i in range(1, 11)])
+        file_id = "test_upload_10a2"
+        MockTelegramHandler.file_storage[f"{file_id}.csv"] = csv_content.encode("utf-8")
+
+        u = self._make_doc_update(file_id, "danh_sach_10A2.csv")
+        self.bot.handle_update(u)
+
+        # Bot phải gửi 2 documents: 1 PDF và 1 CSV
+        self.assertEqual(len(MockTelegramHandler.sent_documents), 2)
+        pdf_doc = None
+        csv_doc = None
+        for d in MockTelegramHandler.sent_documents:
+            fname, fbytes = self._extract_document(d)
+            if fname.lower().endswith(".pdf"):
+                pdf_doc = (fname, fbytes)
+            elif fname.lower().endswith(".csv"):
+                csv_doc = (fname, fbytes)
+
+        self.assertIsNotNone(pdf_doc)
+        self.assertIsNotNone(csv_doc)
+
+        # 10 mã / 8 ô mỗi trang = 2 trang
+        page_count = len(re.findall(rb"/Type\s*/Page\b", pdf_doc[1]))
+        self.assertEqual(page_count, 2)
+
+        # 10 dòng dữ liệu
+        lines = [ln.strip() for ln in csv_doc[1].decode("utf-8-sig").splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 11)
+
+    # 15. Thu hồi mã mời trong lớp và kiểm tra không còn mở được
+    def test_15_batch_revocation(self):
+        # Thu hồi HS002
+        u = self._make_msg_update("/thuhoi HS002")
+        self.bot.handle_update(u)
+        self.assertIn("Đã thu hồi", MockTelegramHandler.sent_messages[-1]["text"])
+
+        # Kiểm tra API GET /api/invites xem HS002 đã bị revoked chưa
+        st, res = self.bot.srv_request("GET", "/api/invites?class=10A1")
+        self.assertEqual(st, 200)
+        hs002_inv = next((x for x in res if x.get("code") == "HS002"), None)
+        self.assertIsNotNone(hs002_inv)
+        self.assertTrue(hs002_inv.get("revoked"))
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,3 +1,5 @@
 # Phụ thuộc cho Bot Telegram giáo viên (server/tuvan_bot.py)
 # Thư viện thuần Python, sinh mã QR PNG không cần Pillow hay C-extensions
 segno>=1.6.0
+# Tạo file PDF phiếu QR in A4 cho lớp học (khổ 8 ô/trang)
+reportlab>=4.0.0

@@ -615,7 +615,7 @@ class H(BaseHTTPRequestHandler):
                         "submittedAt": None,
                         "submitCount": 0
                     })
-                    res_items.append({"code": code, "token": tok, "link": link, "expiresAt": expires_at})
+                    res_items.append({"code": code, "token": tok, "link": link, "expiresAt": expires_at, "className": class_name})
                 with _lock:
                     invs = _read_json(INVITES(), [])
                     invs.extend(new_records)

@@ -20,11 +20,23 @@ import urllib.parse
 import urllib.error
 from pathlib import Path
 
+import unicodedata
+
 # Thư viện thuần Python tạo mã QR PNG
 try:
     import segno
 except ImportError:
     segno = None
+
+# Thư viện tạo file PDF in phiếu QR A4
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+except ImportError:
+    canvas = None
 
 # ----------------- Cấu hình môi trường -----------------
 TUVAN_BOT_TOKEN = os.environ.get("TUVAN_BOT_TOKEN", "").strip()
@@ -120,6 +132,281 @@ def _calc_mbti(mbti_list):
             letters.append(la + "/" + lb)
     return "".join(letters)
 
+# ----------------- Hỗ trợ tạo dải mã, file PDF và CSV cả lớp -----------------
+def remove_accents(text):
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    text = text.replace("đ", "d").replace("Đ", "D")
+    return unicodedata.normalize("NFC", text)
+
+def parse_code_range(arg_str):
+    arg_str = (arg_str or "").strip()
+    m = re.match(r"^([A-Za-z0-9_.\-]+?)\s*(?:\s+-\s+|\s+–\s+|\.\.|->|\s+đến\s+|\s+to\s+|\s+)\s*([A-Za-z0-9_.\-]+)$", arg_str, re.IGNORECASE)
+    if not m:
+        m = re.match(r"^([A-Za-z0-9_.\-]+?)-(HS\d+|\d+|[A-Za-z0-9_.\-]+)$", arg_str)
+        if not m:
+            return None, "Cú pháp dải mã không đúng (ví dụ: HS001-HS045)."
+
+    s1, s2 = m.group(1).strip(), m.group(2).strip()
+    m1 = re.search(r"^(.*?)(\d+)$", s1)
+    m2 = re.search(r"^(.*?)(\d+)$", s2)
+    if not m1 or not m2:
+        return None, "Mã học sinh phải kết thúc bằng chữ số (ví dụ: HS001-HS045)."
+
+    p1, d1 = m1.group(1), m1.group(2)
+    p2, d2 = m2.group(1), m2.group(2)
+    if p1 != p2:
+        return None, f"Tiền tố mã không khớp: '{p1}' khác '{p2}'."
+
+    n1, n2 = int(d1), int(d2)
+    if n1 > n2:
+        return None, f"Số bắt đầu ({n1}) lớn hơn số kết thúc ({n2})."
+
+    count = n2 - n1 + 1
+    if count > 60:
+        return None, f"Số lượng mã ({count}) vượt quá giới hạn tối đa 60 mã/lớp."
+
+    w = max(len(d1), len(d2))
+    codes = [f"{p1}{i:0{w}d}" for i in range(n1, n2 + 1)]
+    return codes, None
+
+def parse_csv_student_list(csv_bytes):
+    try:
+        text = csv_bytes.decode("utf-8-sig")
+    except Exception:
+        try:
+            text = csv_bytes.decode("utf-8")
+        except Exception:
+            text = csv_bytes.decode("latin-1", errors="replace")
+
+    stream = io.StringIO(text)
+    reader = csv.reader(stream)
+
+    rows = [r for r in reader if any(cell.strip() for cell in r)]
+    if not rows:
+        return None, "File CSV trống."
+
+    header = [c.strip().lower() for c in rows[0]]
+    has_header = False
+    code_idx = -1
+    class_idx = -1
+
+    for i, col in enumerate(header):
+        clean_col = re.sub(r"[_\s\-]+", "", col)
+        if clean_col in ("mahs", "ma", "code", "mahocsinh", "mshs", "studentid"):
+            code_idx = i
+            has_header = True
+        elif clean_col in ("lop", "class", "classname", "lophoc"):
+            class_idx = i
+            has_header = True
+
+    data_rows = rows[1:] if has_header else rows
+
+    if code_idx == -1:
+        code_idx = 0
+    if class_idx == -1 and len(rows[0]) > 1:
+        class_idx = 1
+
+    items = []
+    for r_idx, r in enumerate(data_rows, start=2 if has_header else 1):
+        if not r or len(r) <= code_idx:
+            continue
+        c = r[code_idx].strip()
+        if not c:
+            continue
+        if not CODE_RX.match(c):
+            if r_idx == 1 and not has_header:
+                continue
+            return None, f"Mã học sinh không hợp lệ tại dòng {r_idx}: '{c}'"
+        cl = r[class_idx].strip() if (class_idx >= 0 and len(r) > class_idx) else ""
+        items.append({"code": c, "className": cl})
+
+    if not items:
+        return None, "Không tìm thấy dữ liệu học sinh hợp lệ trong file CSV."
+    if len(items) > 60:
+        return None, f"File chứa {len(items)} học sinh, vượt quá giới hạn tối đa 60 học sinh/lớp."
+
+    return items, None
+
+_FONTS_SETUP = False
+_PDF_NORMAL_FONT = "Helvetica"
+_PDF_BOLD_FONT = "Helvetica-Bold"
+_PDF_HAS_UNICODE = False
+
+def setup_pdf_fonts():
+    global _FONTS_SETUP, _PDF_NORMAL_FONT, _PDF_BOLD_FONT, _PDF_HAS_UNICODE
+    if _FONTS_SETUP:
+        return _PDF_NORMAL_FONT, _PDF_BOLD_FONT, _PDF_HAS_UNICODE
+    if not canvas:
+        return "Helvetica", "Helvetica-Bold", False
+
+    font_paths = [
+        ("AppFont", "C:\\Windows\\Fonts\\arial.ttf"),
+        ("AppFontBold", "C:\\Windows\\Fonts\\arialbd.ttf"),
+        ("AppFont", "/Library/Fonts/Arial.ttf"),
+        ("AppFontBold", "/Library/Fonts/Arial Bold.ttf"),
+        ("AppFont", "/System/Library/Fonts/Supplemental/Arial.ttf"),
+        ("AppFontBold", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ("AppFont", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ("AppFontBold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ]
+    reg_normal, reg_bold = False, False
+    for name, p in font_paths:
+        if os.path.exists(p):
+            try:
+                if name == "AppFont" and not reg_normal:
+                    pdfmetrics.registerFont(TTFont("AppFont", p))
+                    reg_normal = True
+                elif name == "AppFontBold" and not reg_bold:
+                    pdfmetrics.registerFont(TTFont("AppFontBold", p))
+                    reg_bold = True
+            except Exception:
+                pass
+    if reg_normal:
+        _PDF_NORMAL_FONT = "AppFont"
+    if reg_bold:
+        _PDF_BOLD_FONT = "AppFontBold"
+    _PDF_HAS_UNICODE = reg_normal
+    _FONTS_SETUP = True
+    return _PDF_NORMAL_FONT, _PDF_BOLD_FONT, _PDF_HAS_UNICODE
+
+def generate_cards_pdf(items, class_name=""):
+    if not canvas:
+        raise RuntimeError("Chưa cài đặt thư viện reportlab để tạo file PDF (pip install reportlab)")
+    normal_font, bold_font, is_unicode = setup_pdf_fonts()
+    bio = io.BytesIO()
+    c = canvas.Canvas(bio, pagesize=A4)
+    page_w, page_h = A4
+
+    # 2 cột x 4 hàng = 8 ô mỗi trang
+    cols = 2
+    rows = 4
+    cards_per_page = cols * rows
+
+    margin_x = 24
+    margin_y = 25
+    gap_x = 14
+    gap_y = 12
+
+    card_w = (page_w - 2 * margin_x - (cols - 1) * gap_x) / cols
+    card_h = (page_h - 2 * margin_y - (rows - 1) * gap_y) / rows
+
+    def _t(text):
+        return text if is_unicode else remove_accents(text)
+
+    for idx, item in enumerate(items):
+        page_idx = idx % cards_per_page
+        if idx > 0 and page_idx == 0:
+            c.showPage()
+
+        row = page_idx // cols
+        col = page_idx % cols
+
+        x = margin_x + col * (card_w + gap_x)
+        y = page_h - margin_y - (row + 1) * card_h - row * gap_y
+
+        code = str(item.get("code") or "")
+        cl = str(item.get("className") or class_name or "")
+        link = str(item.get("link") or "")
+        exp = str(item.get("expiresAt") or "")[:10]
+
+        # 1. Viền ô đứt nét để cắt rời
+        c.saveState()
+        c.setStrokeColorRGB(0.72, 0.72, 0.72)
+        c.setLineWidth(0.8)
+        c.setDash([3, 2])
+        c.roundRect(x, y, card_w, card_h, 4, stroke=1, fill=0)
+        c.restoreState()
+
+        # 2. Tiêu đề phiếu
+        c.saveState()
+        c.setFillColorRGB(0.75, 0.12, 0.12)
+        c.setFont(bold_font, 9)
+        c.drawString(x + 10, y + card_h - 18, _t("PHIẾU KHẢO SÁT CHỌN MÔN LỚP 10"))
+        c.setStrokeColorRGB(0.85, 0.85, 0.85)
+        c.setLineWidth(0.5)
+        c.line(x + 10, y + card_h - 22, x + card_w - 10, y + card_h - 22)
+        c.restoreState()
+
+        # 3. Mã QR
+        qr_size = 96
+        qr_x = x + 10
+        qr_y = y + card_h - 28 - qr_size
+
+        if segno and link:
+            try:
+                qr = segno.make(link)
+                png_bio = io.BytesIO()
+                qr.save(png_bio, kind="png", scale=4, border=1)
+                png_bio.seek(0)
+                img = ImageReader(png_bio)
+                c.drawImage(img, qr_x, qr_y, width=qr_size, height=qr_size)
+            except Exception:
+                pass
+
+        # 4. Thông tin bên phải QR: Mã HS, Lớp, Hạn dùng (TUYỆT ĐỐI KHÔNG CÓ TÊN HỌC SINH)
+        info_x = qr_x + qr_size + 10
+        c.saveState()
+
+        c.setFont(normal_font, 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(info_x, qr_y + qr_size - 14, _t("MÃ HỌC SINH:"))
+
+        c.setFont(bold_font, 14)
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.drawString(info_x, qr_y + qr_size - 30, code)
+
+        c.setFont(normal_font, 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(info_x, qr_y + qr_size - 46, _t("LỚP:"))
+
+        c.setFont(bold_font, 11)
+        c.setFillColorRGB(0.15, 0.15, 0.15)
+        c.drawString(info_x, qr_y + qr_size - 59, cl or "–")
+
+        c.setFont(normal_font, 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(info_x, qr_y + qr_size - 74, _t("HẠN DÙNG:"))
+
+        c.setFont(normal_font, 9)
+        c.setFillColorRGB(0.8, 0.2, 0.2)
+        c.drawString(info_x, qr_y + qr_size - 87, exp or "7 ngày")
+
+        c.restoreState()
+
+        # 5. Dòng hướng dẫn và bản quyền
+        c.saveState()
+        c.setFont(normal_font, 7.5)
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        c.drawString(x + 10, y + 20, _t("Quét mã, cha mẹ cùng con làm khảo sát trước buổi tư vấn"))
+
+        c.setFont(normal_font, 6.5)
+        c.setFillColorRGB(0.55, 0.55, 0.55)
+        c.drawString(x + 10, y + 8, "© 2026 Dr. Duyen Nguyen. All rights reserved.")
+        c.restoreState()
+
+    c.showPage()
+    c.save()
+    return bio.getvalue()
+
+def generate_batch_csv(items, class_name=""):
+    bio = io.BytesIO()
+    bio.write(b"\xef\xbb\xbf")
+    text_stream = io.TextIOWrapper(bio, encoding="utf-8", newline="")
+    writer = csv.DictWriter(text_stream, fieldnames=["ma_hs", "lop", "link", "het_han"])
+    writer.writeheader()
+    for it in items:
+        writer.writerow({
+            "ma_hs": it.get("code", ""),
+            "lop": it.get("className") or class_name or "",
+            "link": it.get("link", ""),
+            "het_han": str(it.get("expiresAt") or "")[:10]
+        })
+    text_stream.flush()
+    return bio.getvalue()
+
 # ----------------- Lớp Bot Tư Vấn -----------------
 class TuVanBot:
     def __init__(self, token=None, teacher_ids=None, service_url=None, service_token=None,
@@ -173,9 +460,20 @@ class TuVanBot:
         return self.tg_call("sendPhoto", data=data, files=files)
 
     def send_document(self, chat_id, doc_bytes, filename="danh_sach.csv", caption=""):
-        files = {"document": (filename, doc_bytes, "text/csv; charset=utf-8")}
+        mtype = "application/pdf" if filename.lower().endswith(".pdf") else "text/csv; charset=utf-8"
+        files = {"document": (filename, doc_bytes, mtype)}
         data = {"chat_id": str(chat_id), "caption": caption}
         return self.tg_call("sendDocument", data=data, files=files)
+
+    def download_file(self, file_id):
+        file_info = self.tg_call("getFile", {"file_id": file_id})
+        file_path = file_info.get("file_path", "")
+        if not file_path:
+            raise RuntimeError("Telegram không trả về file_path")
+        url = f"{self.api_base}/file/bot{self.token}/{file_path}"
+        req = urllib.request.Request(url, headers={"User-Agent": "TuVanBot/1.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read()
 
     # ---- Service API Calls (cổng 8788) ----
     def srv_request(self, method, path, body=None):
@@ -231,6 +529,12 @@ class TuVanBot:
             )
             return
 
+        # Xử lý file đính kèm (ví dụ danh sách học sinh file .csv)
+        doc = msg.get("document")
+        if doc:
+            self._handle_document(chat_id, user_id, doc)
+            return
+
         # Xử lý các lệnh
         if not text.startswith("/"):
             return
@@ -243,6 +547,8 @@ class TuVanBot:
             self._cmd_help(chat_id)
         elif cmd == "/taolink":
             self._cmd_taolink(chat_id, user_id, args)
+        elif cmd == "/taolop":
+            self._cmd_taolop(chat_id, user_id, args)
         elif cmd == "/danhsach":
             self._cmd_danhsach(chat_id, args)
         elif cmd == "/chuanop":
@@ -265,7 +571,9 @@ class TuVanBot:
         help_text = (
             "Chào Thầy/Cô! Đây là hệ thống Bot hỗ trợ tư vấn chọn môn lớp 10 dành cho giáo viên.\n\n"
             "Các lệnh có thể sử dụng:\n"
-            "• /taolink <mã HS> [lớp] : Tạo mã mời và ảnh QR để gửi cho phụ huynh & học sinh khảo sát tại nhà\n"
+            "• /taolink <mã HS> [lớp] : Tạo mã mời và ảnh QR cho 1 học sinh\n"
+            "• /taolop <lớp> <mã_bắt_đầu>-<mã_kết_thúc> : Tạo mã mời cả lớp (tối đa 60 mã), gửi lại 1 file PDF in A4 (mỗi trang 8 ô QR) + 1 file CSV link\n"
+            "• Gửi file .csv (cột ma_hs,lop) : Bot tự động tạo link và phiếu QR cả lớp\n"
             "• /danhsach [lớp] : Xem danh sách mã mời khảo sát (đã nộp / chưa nộp)\n"
             "• /chuanop [lớp] : Danh sách học sinh chưa nộp khảo sát\n"
             "• /hoso <mã HS> : Tóm tắt kết quả trắc nghiệm và tiến độ hồ sơ\n"
@@ -276,6 +584,137 @@ class TuVanBot:
             "• /trogiup : Xem lại hướng dẫn này"
         )
         self.send_message(chat_id, help_text)
+
+    def _cmd_taolop(self, chat_id, user_id, args):
+        if len(args) < 2:
+            self.send_message(
+                chat_id,
+                "Cú pháp: /taolop <lớp> <mã_bắt_đầu>-<mã_kết_thúc>\n"
+                "Ví dụ: /taolop 10A1 HS001-HS045\n"
+                "Hoặc Thầy/Cô có thể gửi trực tiếp file .csv (cột ma_hs,lop) vào đây."
+            )
+            return
+
+        class_name = args[0].strip()
+        range_str = " ".join(args[1:])
+        codes, err = parse_code_range(range_str)
+        if err:
+            self.send_message(chat_id, f"❌ {err}")
+            return
+
+        self._process_batch_invites(chat_id, user_id, class_name, codes)
+
+    def _handle_document(self, chat_id, user_id, doc):
+        fname = doc.get("file_name", "")
+        mime = doc.get("mime_type", "")
+        if not fname.lower().endswith(".csv") and "csv" not in mime.lower():
+            self.send_message(chat_id, "Bot chỉ nhận file danh sách học sinh định dạng .csv (có cột ma_hs, lop).")
+            return
+
+        file_id = doc.get("file_id")
+        if not file_id:
+            self.send_message(chat_id, "Không tìm thấy mã file từ Telegram.")
+            return
+
+        try:
+            csv_bytes = self.download_file(file_id)
+        except Exception as e:
+            self.send_message(chat_id, f"Không tải được file từ Telegram: {e}")
+            return
+
+        items, err = parse_csv_student_list(csv_bytes)
+        if err:
+            self.send_message(chat_id, f"❌ {err}")
+            return
+
+        class_name = ""
+        for it in items:
+            if it.get("className"):
+                class_name = it["className"]
+                break
+        if not class_name:
+            m = re.search(r"(10[A-Za-z0-9]+)", fname)
+            if m:
+                class_name = m.group(1)
+
+        self._process_batch_invites(chat_id, user_id, class_name, items)
+
+    def _process_batch_invites(self, chat_id, user_id, default_class, student_items):
+        groups = {}
+        for it in student_items:
+            if isinstance(it, dict):
+                c = it.get("code", "").strip()
+                cl = it.get("className", "").strip() or default_class
+            else:
+                c = str(it).strip()
+                cl = default_class
+            if c:
+                groups.setdefault(cl, []).append(c)
+
+        total_codes = sum(len(codes) for codes in groups.values())
+        if total_codes == 0:
+            self.send_message(chat_id, "Không có mã học sinh nào để tạo mã mời.")
+            return
+        if total_codes > 60:
+            self.send_message(chat_id, f"Số lượng học sinh ({total_codes}) vượt quá giới hạn tối đa 60 mã/lớp.")
+            return
+
+        all_res_items = []
+        for cl, codes in groups.items():
+            status, res = self.srv_request("POST", "/api/invites/batch", {
+                "className": cl,
+                "codes": codes,
+                "createdBy": str(user_id),
+                "days": 7
+            })
+            if status != 200:
+                self.send_message(chat_id, f"Không tạo được mã mời hàng loạt: {res.get('error', 'Lỗi không xác định')}")
+                return
+            if isinstance(res, list):
+                for item in res:
+                    if "className" not in item:
+                        item["className"] = cl
+                all_res_items.extend(res)
+
+        if not all_res_items:
+            self.send_message(chat_id, "Không nhận được kết quả mã mời từ máy chủ.")
+            return
+
+        today = time.strftime("%Y%m%d")
+        safe_class = re.sub(r"[^\w\-]+", "_", default_class or "lop")
+
+        try:
+            pdf_bytes = generate_cards_pdf(all_res_items, default_class)
+            pdf_name = f"phieu_qr_{safe_class}_{today}.pdf"
+            self.send_document(
+                chat_id,
+                pdf_bytes,
+                filename=pdf_name,
+                caption=f"📄 Phiếu QR in A4 cho lớp {default_class or 'tư vấn'} ({len(all_res_items)} học sinh, mỗi trang 8 ô để cắt phát)."
+            )
+        except Exception as e:
+            self.send_message(chat_id, f"Lỗi tạo file PDF: {e}")
+
+        try:
+            csv_bytes = generate_batch_csv(all_res_items, default_class)
+            csv_name = f"link_khao_sat_{safe_class}_{today}.csv"
+            self.send_document(
+                chat_id,
+                csv_bytes,
+                filename=csv_name,
+                caption=f"📁 File CSV danh sách link khảo sát lớp {default_class or 'tư vấn'} để gửi qua Zalo/email."
+            )
+        except Exception as e:
+            self.send_message(chat_id, f"Lỗi tạo file CSV: {e}")
+
+        self.send_message(
+            chat_id,
+            f"✅ Đã tạo thành công {len(all_res_items)} mã mời khảo sát cho lớp {default_class or 'tư vấn'}!\n"
+            f"• Hạn dùng: 7 ngày\n"
+            f"• File PDF in A4: gồm {len(all_res_items)} ô phiếu khảo sát (8 ô/trang), giáo viên in và cắt phát cho học sinh/phụ huynh.\n"
+            f"• File CSV: chứa link khảo sát để Thầy/Cô gửi trực tiếp qua Zalo hoặc email nếu cần.\n"
+            f"• Để kiểm tra tiến độ nộp bài: gõ /danhsach {default_class}"
+        )
 
     def _cmd_taolink(self, chat_id, user_id, args):
         if not args:
