@@ -5,7 +5,7 @@
 Bản **demo** để minh họa chức năng. Dữ liệu và bộ trắc nghiệm là bản dùng tạm, sẽ chuẩn hóa sau.
 
 ## Phiên bản
-Phiên bản hiện tại: **v2.2** (28/10/2026) – Bước 2 dùng Holland, Eysenck và MBTI. Mỗi phiên bản được giữ ở một nhánh `phien-ban/...` trên GitHub. Cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md`.
+Phiên bản hiện tại: **v2.3** (29/10/2026) – Bổ sung hệ thống Bot Telegram giáo viên, tạo mã mời và khảo sát tại nhà qua link/QR an toàn (NĐ 13/2023/NĐ-CP), tự động tạo phiếu in A4 8 ô/trang và file CSV cả lớp, nạp dịch vụ tự chạy launchd 24/7 và script sao lưu tự động. Mỗi phiên bản được giữ ở một nhánh `phien-ban/...` trên GitHub. Cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md`.
 
 Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh sách trường chỉ lưu trên máy đang dùng, trợ lý chạy chế độ demo. Khu vực giáo viên dùng chung, đăng nhập và lấy tổ hợp từ link web trường cần chạy qua máy chủ (`server/`).
 
@@ -30,6 +30,8 @@ Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh
 | 7. Theo dõi | Mô tả 5 mức hài lòng và căng thẳng, nhập theo kỳ, cảnh báo sớm, hướng dẫn đổi môn theo CV 68, **Lưu hồ sơ** (báo mục còn thiếu nhưng vẫn lưu) → **H7** |
 | Khu vực giáo viên | Nút **Giáo viên**: danh mục hồ sơ (tìm, mở, xoá), nhập kết quả Google Form (.csv/.xlsx) khớp theo Mã học sinh, cơ sở dữ liệu trường. Mở file trực tiếp: lưu trên trình duyệt máy đó. Mở qua máy chủ: cần mật khẩu, dữ liệu dùng chung. Mẫu câu hỏi: `docs/MAU-GOOGLE-FORM.md` |
 | Trợ lý tư vấn | Trả lời theo bộ câu hỏi có sẵn (quy định, tổ hợp, ngành nghề, gợi ý tổ hợp…), xưng hô theo vai trò, phản hồi an toàn khi có dấu hiệu khủng hoảng (111, 115) |
+| Khảo sát tại nhà | Mở qua link/QR trên điện thoại (không cần Telegram, không tài khoản); đồng thuận cha mẹ + học sinh; làm Bước 1–2 tại nhà và nộp an toàn về máy chủ |
+| Bot Telegram giáo viên | Tạo mã mời 1 em (`/taolink`) hoặc cả lớp (`/taolop` xuất PDF in A4 8 ô/trang + CSV); thông báo nộp bài; tóm tắt hồ sơ an toàn (`/hoso`); cảnh báo (`/canhbao`); theo dõi (`/theodoi`); xuất CSV (`/xuat`) |
 
 Mẹo khi thử: ở mỗi bài trắc nghiệm có nút **“Điền ngẫu nhiên (để thử demo)”** để đi nhanh qua các bước.
 
@@ -44,18 +46,26 @@ web-demo/
 ├─ js/app.js         Logic 7 bước, chấm điểm, gợi ý, kiểm tra hợp lệ
 └─ js/chat.js        Trợ lý tư vấn (demo) + chỗ gắn API
 server/
-├─ tuvan_proxy.py    Trạm trung gian chạy trên Mac (nối web ↔ Hermes Agent)
+├─ tuvan_proxy.py    Trạm trung gian (HTTP server chuẩn, phục vụ web, cổng 8787 và cổng dịch vụ 8788)
+├─ tuvan_bot.py      Bot Telegram cho giáo viên (long polling, tạo QR, sinh PDF in A4, CSV)
+├─ start_tuvan.sh    Khởi động trạm trung gian
+├─ start_bot.sh      Khởi động Bot Telegram giáo viên
+├─ cai-dat-tu-chay.sh Cài đặt dịch vụ launchd 24/7 cho trạm proxy và bot
+├─ sao-luu-du-lieu.sh Script tự động sao lưu dữ liệu DATA_DIR (giữ 14 bản gần nhất)
+├─ requirements-bot.txt Thư viện phụ thuộc cho bot (segno, reportlab)
 ├─ SOUL.md           Vai trò cho profile tư vấn của Hermes
-├─ start_tuvan.sh    Khởi động trạm (tự đọc khóa của profile tuvan)
-├─ cai-dat-tu-chay.sh  Cài trạm thành dịch vụ tự chạy 24/7 trên Mac
-├─ tuvan.env.example Mẫu cấu hình địa chỉ Tailscale Funnel
-└─ HUONG-DAN-KET-NOI-HERMES.md   Hướng dẫn từng bước
+├─ tuvan.env.example Mẫu cấu hình môi trường và khoá bí mật
+├─ HUONG-DAN-BOT-GIAO-VIEN.md Hướng dẫn sử dụng Bot Telegram cho giáo viên
+└─ HUONG-DAN-KET-NOI-HERMES.md Hướng dẫn kết nối Hermes
 ```
 - Sửa ngành nghề, trường, câu hỏi: chỉnh trong `js/data.js`.
 - Trường minh họa A, B **không phải dữ liệu thật**. Muốn thêm trường thật, nhập ở ô “Nhập tổ hợp của trường THPT” ngay tại Bước 4 (hoặc nút “Lấy từ website / dán thông báo của trường…”) (cú pháp nhập tay: `docs/QUY-UOC-NHAP-TO-HOP.md`), hoặc thêm vào `SAMPLE_SCHOOLS`.
 
-## Kế hoạch tiếp theo: bot Telegram cho giáo viên + khảo sát tại nhà
-Giáo viên tạo link/QR → cha mẹ và học sinh làm Bước 1–2 tại nhà trên điện thoại → giáo viên nhận thông báo qua bot và tư vấn ngay hôm sau. Thiết kế, quy tắc an toàn dữ liệu và prompt bàn giao từng giai đoạn: `docs/BAN-GIAO-BOT-TELEGRAM.md`.
+## Khảo sát tại nhà và Bot Telegram cho giáo viên
+Giáo viên tạo link/QR qua Bot Telegram → cha mẹ và học sinh làm Bước 1–2 tại nhà trên điện thoại → giáo viên nhận thông báo tự động qua Bot và tư vấn trực tiếp ngay hôm sau.
+- Hướng dẫn thực hành cho giáo viên: `docs/HUONG-DAN-GIAO-VIEN-KHAO-SAT.md`.
+- Hướng dẫn cấu hình Bot: `server/HUONG-DAN-BOT-GIAO-VIEN.md`.
+- Tài liệu kỹ thuật chi tiết: `docs/BAN-GIAO-BOT-TELEGRAM.md`.
 
 ## Gắn bot Telegram / máy chủ AI
 Web đã chừa sẵn chỗ gắn. Khi có máy chủ AI (có thể dùng chung với bot Telegram), chỉ cần điền địa chỉ vào `js/config.js`:
