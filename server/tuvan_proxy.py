@@ -519,7 +519,8 @@ class H(BaseHTTPRequestHandler):
                         "className": rec.get("className", ""),
                         "createdBy": target.get("createdBy", ""),
                         "submittedAt": now_str,
-                        "submitCount": sub_count
+                        "submitCount": sub_count,
+                        "missingCount": rec.get("missing", 0)
                     }
                     try:
                         EVENTS().parent.mkdir(parents=True, exist_ok=True)
