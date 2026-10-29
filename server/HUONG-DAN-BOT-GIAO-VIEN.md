@@ -84,7 +84,7 @@ pip install -r server/requirements-bot.txt
 | `/chuanop` | `/chuanop [lớp]` | `/chuanop 10A1` | Lọc nhanh danh sách các học sinh chưa nộp bài. |
 | `/hoso` | `/hoso <mã HS>` | `/hoso HS001` | Xem tóm tắt kết quả trắc nghiệm (Holland, Eysenck, MBTI), số mục thiếu và link mở web. |
 | `/canhbao` | `/canhbao` | `/canhbao` | Cảnh báo học sinh có mức hài lòng ≤2 hoặc căng thẳng ≥4 ở Bước 7. |
-| `/theodoi` | `/theodoi <mã HS> <đợt> [hailong=1-5] [cangthang=1-5] [ghichu=...]` | `/theodoi HS001 hk1 hailong=4 cangthang=2 ghichu=tien_bo` | Ghi nhận kết quả theo dõi Bước 7 sau buổi tư vấn. |
+| `/theodoi` | `/theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5 [ghichu=...]` (đợt: giuahk1, hk1, giuahk2, cuoinam, hk1-11, cn11, hk1-12; điểm là số nguyên 1–5) | `/theodoi HS001 hk1 hailong=4 cangthang=2 ghichu=tien_bo` | Ghi nhận kết quả theo dõi Bước 7 sau buổi tư vấn. |
 | `/xuat` | `/xuat [lớp]` | `/xuat 10A1` | Xuất file `.csv` tổng hợp danh sách học sinh (mở được bằng Excel). |
 | `/thuhoi` | `/thuhoi <mã HS>` | `/thuhoi HS001` | Thu hồi toàn bộ mã mời khảo sát còn hạn của học sinh. |
 

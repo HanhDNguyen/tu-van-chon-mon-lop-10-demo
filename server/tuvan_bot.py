@@ -59,78 +59,112 @@ EYSENCK_KEY = [
 ]
 EYSENCK_MID = 12
 
+# Cách chấm phải GIỐNG HỆT web (js/app.js: hollandStats, eysenckStats, mbtiStats, eyText, mbtiText).
+# Chưa làm đủ câu thì KHÔNG gắn nhãn – chỉ báo "chưa đủ (n/N)". Kiểm thử đối chiếu: tests/test_bot_scoring.py
+HOLLAND_ORDER = ("R", "I", "A", "S", "E", "C")
+HOLLAND_N, EYSENCK_N, MBTI_N = 54, 59, 70
+EYSENCK_NAMES = {"uuTu": "Ưu tư", "binhThan": "Bình thản", "nongNay": "Nóng nảy", "hangHai": "Hăng hái"}
+MBTI_DIMS = (("EI", "E", "I", (0,)), ("SN", "S", "N", (1, 2)), ("TF", "T", "F", (3, 4)), ("JP", "J", "P", (5, 6)))
+
+def _is_score(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
 def _calc_holland(holland_data):
+    """Giống tóm tắt trên web: mã 3 chữ, thêm "(chưa đủ)" nếu chưa trả lời đủ 54 câu."""
     if not isinstance(holland_data, dict):
         return "–"
-    sc = {}
-    for k, items in holland_data.items():
-        if isinstance(items, list):
-            sc[k] = sum(x for x in items if isinstance(x, (int, float)))
-    if not sc or not any(sc.values()):
+    sc, answered = {}, 0
+    for k in HOLLAND_ORDER:
+        items = holland_data.get(k) if isinstance(holland_data.get(k), list) else []
+        answered += sum(1 for x in items if x is not None)
+        sc[k] = sum(x for x in items if _is_score(x))
+    if not answered:
         return "–"
-    order = sorted(sc.keys(), key=lambda k: sc[k], reverse=True)
-    return "".join(order[:3])
+    order = sorted(HOLLAND_ORDER, key=lambda k: -sc[k])  # sort ổn định như Array.sort của trình duyệt
+    code = "".join(order[:3])
+    return code if answered == HOLLAND_N else f"{code} (chưa đủ {answered}/{HOLLAND_N} câu)"
 
-def _calc_eysenck(eysenck_list):
-    if not isinstance(eysenck_list, list) or len(eysenck_list) < 12:
-        return "–"
+def _eysenck_stats(eysenck_list):
     sc = {"HN": 0, "KOD": 0, "S": 0}
     answered = 0
-    for i, v in enumerate(eysenck_list):
-        if not v:
+    for i, v in enumerate(eysenck_list if isinstance(eysenck_list, list) else []):
+        if v not in ("+", "-"):
             continue
         answered += 1
         k, sign = EYSENCK_KEY[i % 12]
         if v == sign:
             sc[k] += 1
-    if answered < 12:
-        return "–"
-    hn_hi = sc["HN"] > EYSENCK_MID
-    kod_hi = sc["KOD"] > EYSENCK_MID
-    if hn_hi and kod_hi:
-        return "Nóng nảy (hướng ngoại, nhạy cảm)"
-    if hn_hi and not kod_hi:
-        return "Hăng hái / Linh hoạt (hướng ngoại, ổn định)"
-    if not hn_hi and kod_hi:
-        return "Ưu tư (hướng nội, sâu sắc)"
-    return "Bình thản / Điềm đạm (hướng nội, ổn định)"
+    return sc, answered
+
+def _calc_eysenck(eysenck_list):
+    sc, answered = _eysenck_stats(eysenck_list)
+    if answered != EYSENCK_N:
+        return f"chưa đủ ({answered}/{EYSENCK_N})" if answered else "–"
+    m = EYSENCK_MID
+    side = lambda v, hi, lo: [hi] if v > m else [lo] if v < m else [hi, lo]  # đúng 12 = nằm trên ranh giới
+    q = {"iu": "uuTu", "is": "binhThan", "eu": "nongNay", "es": "hangHai"}
+    types = [q[x + y] for x in side(sc["HN"], "e", "i") for y in side(sc["KOD"], "u", "s")]
+    txt = " / ".join(EYSENCK_NAMES[t] for t in types) + f" (HN {sc['HN']}, KOD {sc['KOD']}, S {sc['S']}/9)"
+    if sc["S"] <= 4:
+        txt += " – điểm thành thật thấp, kết quả kém tin cậy"
+    return txt
 
 def _calc_mbti(mbti_list):
-    if not isinstance(mbti_list, list) or len(mbti_list) < 7:
-        return "–"
-    # 4 chiều MBTI: EI, SN, TF, JP
-    cols_map = {
-        0: "EI", 1: "SN", 2: "SN", 3: "TF", 4: "TF", 5: "JP", 6: "JP"
-    }
-    counts = {
-        "EI": {"a": 0, "b": 0},
-        "SN": {"a": 0, "b": 0},
-        "TF": {"a": 0, "b": 0},
-        "JP": {"a": 0, "b": 0}
-    }
-    for i, v in enumerate(mbti_list):
-        if v in ("a", "b"):
-            dim = cols_map.get(i % 7)
-            if dim:
-                counts[dim][v] += 1
-    dim_letters = {
-        "EI": ("E", "I"),
-        "SN": ("S", "N"),
-        "TF": ("T", "F"),
-        "JP": ("J", "P")
-    }
+    lst = mbti_list if isinstance(mbti_list, list) else []
+    res = {d[0]: {"a": 0, "b": 0} for d in MBTI_DIMS}
+    answered = 0
+    for i, v in enumerate(lst):
+        if v not in ("a", "b"):
+            continue
+        answered += 1
+        dim = next(d[0] for d in MBTI_DIMS if i % 7 in d[3])
+        res[dim][v] += 1
+    if answered != MBTI_N:
+        return f"chưa đủ ({answered}/{MBTI_N})" if answered else "–"
     letters = []
-    for dim in ["EI", "SN", "TF", "JP"]:
-        a_cnt = counts[dim]["a"]
-        b_cnt = counts[dim]["b"]
-        la, lb = dim_letters[dim]
-        if a_cnt > b_cnt:
-            letters.append(la)
-        elif b_cnt > a_cnt:
-            letters.append(lb)
-        else:
-            letters.append(la + "/" + lb)
-    return "".join(letters)
+    for dim, la, lb, _ in MBTI_DIMS:
+        a, b = res[dim]["a"], res[dim]["b"]
+        letters.append(la if a > b else lb if b > a else la + "/" + lb)
+    return " · ".join(letters) if any(len(x) > 1 for x in letters) else "".join(letters)
+
+# ----------------- Giờ Việt Nam, CSV an toàn, kỳ theo dõi -----------------
+from datetime import datetime, timezone, timedelta
+VN_TZ = timezone(timedelta(hours=7))
+
+def vn_time(iso, with_time=True):
+    """Máy chủ lưu giờ UTC ("...Z"); hiển thị cho giáo viên theo giờ Việt Nam."""
+    try:
+        dt = datetime.strptime(str(iso)[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).astimezone(VN_TZ)
+        return dt.strftime("%H:%M %d/%m/%Y" if with_time else "%d/%m/%Y")
+    except (ValueError, TypeError):
+        return str(iso or "")[:16]
+
+def is_expired(inv):
+    exp = inv.get("expiresAt") or ""
+    return bool(exp) and exp < time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+def csv_safe(v):
+    """Chặn "CSV injection": ô bắt đầu bằng = + - @ (hoặc tab/CR) sẽ thành công thức khi mở bằng Excel."""
+    s = "" if v is None else str(v)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+# Kỳ theo dõi Bước 7 – cùng danh sách với web (js/data.js: PERIODS); cho phép gõ tắt
+PERIODS = ["Giữa HK1", "Cuối HK1", "Giữa HK2", "Cuối năm lớp 10", "Cuối HK1 lớp 11", "Cuối năm lớp 11", "Cuối HK1 lớp 12"]
+PERIOD_ALIASES = {"giuahk1": "Giữa HK1", "hk1": "Cuối HK1", "cuoihk1": "Cuối HK1", "giuahk2": "Giữa HK2",
+                  "cuoinam": "Cuối năm lớp 10", "cn10": "Cuối năm lớp 10", "hk1-11": "Cuối HK1 lớp 11",
+                  "cn11": "Cuối năm lớp 11", "hk1-12": "Cuối HK1 lớp 12"}
+
+def parse_period(text):
+    key = remove_accents(str(text or "")).lower().replace(" ", "").replace("_", "")
+    for p in PERIODS:
+        if remove_accents(p).lower().replace(" ", "") == key:
+            return p
+    return PERIOD_ALIASES.get(key)
+
+def parse_scale(v):
+    """Thang 1–5 như web; chỉ nhận số nguyên 1..5 (không nhận nan, inf, 99, 3.5)."""
+    v = str(v or "").strip()
+    return int(v) if re.fullmatch(r"[1-5]", v) else None
 
 # ----------------- Hỗ trợ tạo dải mã, file PDF và CSV cả lớp -----------------
 def remove_accents(text):
@@ -578,7 +612,7 @@ class TuVanBot:
             "• /chuanop [lớp] : Danh sách học sinh chưa nộp khảo sát\n"
             "• /hoso <mã HS> : Tóm tắt kết quả trắc nghiệm và tiến độ hồ sơ\n"
             "• /canhbao : Cảnh báo học sinh có mức hài lòng thấp (≤2) hoặc căng thẳng cao (≥4)\n"
-            "• /theodoi <mã HS> <đợt> [hailong=1-5] [cangthang=1-5] [ghichu=...] : Ghi nhận theo dõi Bước 7\n"
+            "• /theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5 [ghichu=...] : Ghi nhận theo dõi Bước 7 (đợt: giuahk1, hk1, giuahk2, cuoinam, hk1-11, cn11, hk1-12)\n"
             "• /xuat [lớp] : Xuất file CSV danh sách tổng hợp (đã lọc dữ liệu riêng tư)\n"
             "• /thuhoi <mã HS> : Thu hồi toàn bộ mã mời còn hạn của học sinh\n"
             "• /trogiup : Xem lại hướng dẫn này"
@@ -782,10 +816,11 @@ class TuVanBot:
                 lines.append(f"{i}. {c}{cl_txt}: Đã thu hồi")
             elif inv.get("submittedAt"):
                 sub_cnt += 1
-                lines.append(f"{i}. {c}{cl_txt}: Đã nộp (lúc {inv.get('submittedAt')[:16]})")
+                lines.append(f"{i}. {c}{cl_txt}: Đã nộp (lúc {vn_time(inv.get('submittedAt'))})")
             else:
                 pend_cnt += 1
-                lines.append(f"{i}. {c}{cl_txt}: Chưa nộp (Hạn: {inv.get('expiresAt', '')[:10]})")
+                han = "ĐÃ HẾT HẠN" if is_expired(inv) else "Hạn: " + vn_time(inv.get("expiresAt"), False)
+                lines.append(f"{i}. {c}{cl_txt}: Chưa nộp ({han})")
 
         lines.append(f"\nTổng cộng: {len(res)} mã ({sub_cnt} đã nộp, {pend_cnt} chưa nộp, {rev_cnt} đã thu hồi).")
         self.send_message(chat_id, "\n".join(lines))
@@ -812,7 +847,8 @@ class TuVanBot:
             c = inv.get("code", "")
             cl = inv.get("className", "")
             cl_txt = f" ({cl})" if cl else ""
-            lines.append(f"{i}. {c}{cl_txt} – Hạn: {inv.get('expiresAt', '')[:10]}")
+            han = "ĐÃ HẾT HẠN – tạo mã mới bằng /taolink" if is_expired(inv) else "Hạn: " + vn_time(inv.get("expiresAt"), False)
+            lines.append(f"{i}. {c}{cl_txt} – {han}")
         lines.append(f"\nTổng cộng: {len(chua_nop)} học sinh chưa nộp.")
         self.send_message(chat_id, "\n".join(lines))
 
@@ -821,6 +857,9 @@ class TuVanBot:
             self.send_message(chat_id, "Cú pháp: /hoso <mã HS>\nVí dụ: /hoso HS001")
             return
         code = args[0].strip()
+        if not CODE_RX.match(code):
+            self.send_message(chat_id, "Mã học sinh chỉ gồm chữ, số, dấu - _ . (tối đa 40 ký tự).")
+            return
         status, res = self.srv_request("GET", f"/api/profiles/{urllib.parse.quote(code)}")
         if status != 200:
             self.send_message(chat_id, f"Không tìm thấy hồ sơ học sinh {code}.")
@@ -839,12 +878,15 @@ class TuVanBot:
         ey_txt = _calc_eysenck(tests.get("eysenck"))
         mbti_txt = _calc_mbti(tests.get("mbti"))
 
-        da_nop = "Đã nộp lúc " + str(home.get("submittedAt", "")[:16]) if home.get("submittedAt") else "Chưa nộp qua link"
-        missing_cnt = prof.get("missing", 0)
+        da_nop = "Đã nộp lúc " + vn_time(home.get("submittedAt")) if home.get("submittedAt") else "Chưa nộp qua link"
+        if "unanswered" in prof and home.get("submittedAt") and prof.get("updatedAt", "") <= home.get("submittedAt", ""):
+            thieu = f"Trắc nghiệm còn {prof.get('unanswered')} câu chưa trả lời" if prof.get("unanswered") else "Đã trả lời đủ 3 trắc nghiệm"
+        else:
+            thieu = f"Còn thiếu {prof.get('missing', 0)} mục (theo lần lưu gần nhất trên web)"
         track_cnt = len(tracking) if isinstance(tracking, list) else 0
 
         # TUYỆT ĐỐI KHÔNG chứa: health, econ, wish, familyWish, họ tên
-        web_link = f"{self.public_origin}/?code={code}#gv"
+        web_link = f"{self.public_origin}/"
 
         txt = (
             f"📄 Tóm tắt hồ sơ học sinh: {code}\n"
@@ -853,9 +895,9 @@ class TuVanBot:
             f"• Holland (top 3): {holland_code}\n"
             f"• Khí chất Eysenck: {ey_txt}\n"
             f"• MBTI: {mbti_txt}\n"
-            f"• Còn thiếu: {missing_cnt} mục\n"
+            f"• {thieu}\n"
             f"• Số lần theo dõi (Bước 7): {track_cnt}\n\n"
-            f"🔗 Mở hồ sơ đầy đủ trên web (Khu vực giáo viên):\n{web_link}"
+            f"🔗 Xem đầy đủ: mở {web_link} → nút Giáo viên → đăng nhập → mở mã {code}."
         )
         self.send_message(chat_id, txt)
 
@@ -914,16 +956,24 @@ class TuVanBot:
         if len(args) < 2:
             self.send_message(
                 chat_id,
-                "Cú pháp: /theodoi <mã HS> <đợt> [hailong=1-5] [cangthang=1-5] [ghichu=...]\n"
+                "Cú pháp: /theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5 [ghichu=...]\n"
+                "Đợt: giuahk1, hk1 (Cuối HK1), giuahk2, cuoinam (Cuối năm lớp 10), hk1-11, cn11, hk1-12\n"
                 "Ví dụ: /theodoi HS001 hk1 hailong=4 cangthang=2 ghichu=on_dinh"
             )
             return
 
         code = args[0].strip()
-        period = args[1].strip()
+        if not CODE_RX.match(code):
+            self.send_message(chat_id, "Mã học sinh chỉ gồm chữ, số, dấu - _ . (tối đa 40 ký tự).")
+            return
+        period = parse_period(args[1])
+        if not period:
+            self.send_message(chat_id, "Đợt theo dõi chưa đúng. Dùng một trong: hk1 (Cuối HK1), giuahk1, giuahk2, cuoinam (Cuối năm lớp 10), hk1-11, cn11, hk1-12.")
+            return
         hailong = None
         cangthang = None
         ghichu = ""
+        errors = []
 
         for item in args[2:]:
             if "=" in item:
@@ -931,17 +981,21 @@ class TuVanBot:
                 k = k.lower().strip()
                 v = v.strip()
                 if k in ("hailong", "overall", "sat"):
-                    try:
-                        hailong = float(v)
-                    except ValueError:
-                        pass
+                    hailong = parse_scale(v)
+                    if hailong is None:
+                        errors.append(f"hailong={v}")
                 elif k in ("cangthang", "stress"):
-                    try:
-                        cangthang = float(v)
-                    except ValueError:
-                        pass
+                    cangthang = parse_scale(v)
+                    if cangthang is None:
+                        errors.append(f"cangthang={v}")
                 elif k in ("ghichu", "note"):
-                    ghichu = v
+                    ghichu = v[:200]
+        if errors:
+            self.send_message(chat_id, "Giá trị không hợp lệ: " + ", ".join(errors) + ". Mức hài lòng và căng thẳng là số nguyên từ 1 đến 5. Chưa lưu gì.")
+            return
+        if hailong is None and cangthang is None:
+            self.send_message(chat_id, "Cần ít nhất hailong=1-5 hoặc cangthang=1-5. Chưa lưu gì.")
+            return
 
         # Lấy hồ sơ hiện tại
         status, res = self.srv_request("GET", f"/api/profiles/{urllib.parse.quote(code)}")
@@ -959,6 +1013,8 @@ class TuVanBot:
 
         entry = {
             "period": period,
+            "source": "bot",
+            "wantChange": False,
             "date": time.strftime("%Y-%m-%d"),
             "scores": {},
             "sat": {},
@@ -975,7 +1031,7 @@ class TuVanBot:
             self.send_message(chat_id, f"Lỗi khi lưu theo dõi: {put_res.get('error', 'Lỗi máy chủ')}")
             return
 
-        hl_str = f", Hài lòng: {hailong}/5" if hailong is not None else ""
+        hl_str = f", Hài lòng: {hailong}/5" if hailong is not None else ""  # số nguyên 1–5
         ct_str = f", Căng thẳng: {cangthang}/5" if cangthang is not None else ""
         nt_str = f", Ghi chú: {ghichu}" if ghichu else ""
         self.send_message(chat_id, f"✅ Đã ghi nhận theo dõi đợt [{period}] cho học sinh {code}{hl_str}{ct_str}{nt_str}.")
@@ -1009,7 +1065,7 @@ class TuVanBot:
             ey_txt = _calc_eysenck(tests.get("eysenck"))
             mbti_txt = _calc_mbti(tests.get("mbti"))
             da_nop = "Đã nộp" if home.get("submittedAt") else "Chưa nộp"
-            ngay_nop = home.get("submittedAt", "")[:10] if home.get("submittedAt") else ""
+            ngay_nop = vn_time(home.get("submittedAt"), False) if home.get("submittedAt") else ""
 
             rows.append({
                 "ma_hs": code,
@@ -1039,7 +1095,7 @@ class TuVanBot:
         ])
         writer.writeheader()
         for r in rows:
-            writer.writerow(r)
+            writer.writerow({k: csv_safe(v) for k, v in r.items()})
         text_stream.flush()
 
         fname = f"danh_sach_{cls_filter or 'tat_ca'}_{time.strftime('%Y%m%d')}.csv"
@@ -1099,11 +1155,12 @@ class TuVanBot:
                                 c = ev.get("code", "")
                                 cl = ev.get("className", "")
                                 cl_txt = f" ({cl})" if cl else ""
-                                at_txt = str(ev.get("submittedAt", ""))[:16].replace("T", " ")
-                                miss = ev.get("missingCount", 0)
+                                at_txt = vn_time(ev.get("submittedAt", ""))
+                                n = ev.get("unanswered", ev.get("missingCount", 0))
+                                miss_txt = f"Trắc nghiệm còn {n} câu chưa trả lời." if n else "Đã trả lời đủ 3 trắc nghiệm."
                                 msg = (
                                     f"🔔 THÔNG BÁO: Học sinh {c}{cl_txt} đã nộp khảo sát tại nhà lúc {at_txt}.\n"
-                                    f"Còn thiếu: {miss} mục. Thầy/Cô có thể gõ /hoso {c} để xem tóm tắt."
+                                    f"{miss_txt} Thầy/Cô có thể gõ /hoso {c} để xem tóm tắt."
                                 )
                                 try:
                                     self.send_message(created_by, msg)

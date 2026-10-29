@@ -328,7 +328,7 @@ class TestTuVanBot(unittest.TestCase):
         data = json.loads(prof_file.read_text(encoding="utf-8"))
         tr = data["data"]["tracking"]
         self.assertEqual(len(tr), 1)
-        self.assertEqual(tr[0]["period"], "hk1")
+        self.assertEqual(tr[0]["period"], "Cuối HK1")
         self.assertEqual(tr[0]["overall"], 4.0)
         self.assertEqual(tr[0]["stress"], 2.0)
         self.assertEqual(tr[0]["note"], "on_dinh")
@@ -405,7 +405,7 @@ class TestTuVanBot(unittest.TestCase):
         self.assertEqual(str(notif["chat_id"]), self.teacher_id)
         self.assertIn("HS009", notif["text"])
         self.assertIn("10A2", notif["text"])
-        self.assertIn("2 mục", notif["text"])
+        self.assertIn("2 câu chưa trả lời", notif["text"])
 
     # 12. Tạo mã mời cả lớp (/taolop 10A1 HS001-HS045) và xuất PDF + CSV
     def test_12_taolop_batch_and_pdf(self):
