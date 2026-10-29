@@ -42,6 +42,9 @@ except ImportError:
 TUVAN_BOT_TOKEN = os.environ.get("TUVAN_BOT_TOKEN", "").strip()
 TEACHER_IDS_RAW = os.environ.get("TEACHER_TELEGRAM_IDS", "").strip()
 TEACHER_TELEGRAM_IDS = set(x.strip() for x in TEACHER_IDS_RAW.split(",") if x.strip())
+# Quản trị viên: được thêm/xoá giáo viên qua bot. Để trống = các ID trong TEACHER_TELEGRAM_IDS là quản trị viên.
+ADMIN_TELEGRAM_IDS = set(x.strip() for x in os.environ.get("ADMIN_TELEGRAM_IDS", "").split(",") if x.strip())
+TELEGRAM_ID_RE = re.compile(r"^[0-9]{5,15}$")
 BOT_SERVICE_TOKEN = os.environ.get("BOT_SERVICE_TOKEN", "").strip()
 SERVICE_URL = os.environ.get("SERVICE_URL", "http://127.0.0.1:8788").rstrip("/")
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "http://127.0.0.1:8787").rstrip("/")
@@ -454,9 +457,14 @@ except Exception:
 
 class TuVanBot:
     def __init__(self, token=None, teacher_ids=None, service_url=None, service_token=None,
-                 public_origin=None, data_dir=None, api_base=None):
+                 public_origin=None, data_dir=None, api_base=None, admin_ids=None):
         self.token = (token or TUVAN_BOT_TOKEN).strip()
-        self.teacher_ids = teacher_ids if teacher_ids is not None else TEACHER_TELEGRAM_IDS
+        # Giáo viên khai báo trong tuvan.env (cố định, không xoá được qua bot)
+        self.teacher_ids = set(teacher_ids) if teacher_ids is not None else set(TEACHER_TELEGRAM_IDS)
+        if admin_ids is not None:
+            self.admin_ids = set(admin_ids)
+        else:
+            self.admin_ids = set(ADMIN_TELEGRAM_IDS) or set(self.teacher_ids)
         self.service_url = (service_url or SERVICE_URL).rstrip("/")
         self.service_token = (service_token or BOT_SERVICE_TOKEN).strip()
         self.public_origin = (public_origin or PUBLIC_ORIGIN).rstrip("/")
@@ -465,6 +473,7 @@ class TuVanBot:
         self.running = False
         self.last_update_id = 0
         self.offset_file = self.data_dir / "bot_event_offset.txt"
+        self.teachers_file = self.data_dir / "teachers.json"   # giáo viên do quản trị viên thêm qua bot
         self._lock = threading.Lock()
 
     # ---- Telegram API Helpers ----
@@ -543,7 +552,35 @@ class TuVanBot:
 
     # ---- Phân quyền và kiểm tra riêng tư ----
     def is_authorized(self, user_id):
-        return str(user_id) in self.teacher_ids
+        return str(user_id) in self.all_teacher_ids()
+
+    def is_admin(self, user_id):
+        return str(user_id) in self.admin_ids
+
+    # ---- Danh sách giáo viên thêm qua bot (DATA_DIR/teachers.json) ----
+    def load_added_teachers(self):
+        try:
+            data = json.loads(self.teachers_file.read_text(encoding="utf-8"))
+            items = data.get("teachers", []) if isinstance(data, dict) else []
+            return [t for t in items if isinstance(t, dict) and TELEGRAM_ID_RE.match(str(t.get("id", "")))]
+        except FileNotFoundError:
+            return []
+        except Exception as e:
+            sys.stderr.write(f"Không đọc được {self.teachers_file.name}: {e}\n")
+            return []
+
+    def save_added_teachers(self, items):
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.teachers_file.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({"teachers": items}, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        os.replace(tmp, self.teachers_file)
+
+    def all_teacher_ids(self):
+        return set(self.teacher_ids) | set(self.admin_ids) | {str(t["id"]) for t in self.load_added_teachers()}
 
     # ---- Xử lý tin nhắn và lệnh ----
     def handle_update(self, update):
@@ -565,11 +602,17 @@ class TuVanBot:
             )
             return
 
+        first = text.split()[0].lower().split("@")[0] if text.startswith("/") else ""
+        if first in ("/myid", "/id"):
+            self.send_message(chat_id, f"ID Telegram của bạn: {user_id}\nGửi số này cho quản trị viên để được cấp quyền.")
+            return
+
         # Kiểm tra danh sách giáo viên được phép
         if not self.is_authorized(user_id):
             self.send_message(
                 chat_id,
-                "Xin lỗi, tài khoản của bạn chưa được cấp quyền sử dụng hệ thống tư vấn này."
+                "Xin lỗi, tài khoản của bạn chưa được cấp quyền sử dụng hệ thống tư vấn này.\n"
+                f"ID Telegram của bạn: {user_id}. Gửi số này cho quản trị viên để được thêm vào danh sách giáo viên."
             )
             return
 
@@ -588,7 +631,16 @@ class TuVanBot:
         args = parts[1:]
 
         if cmd in ("/start", "/trogiup"):
-            self._cmd_help(chat_id)
+            self._cmd_help(chat_id, user_id)
+        elif cmd in ("/themgv", "/xoagv", "/dsgv"):
+            if not self.is_admin(user_id):
+                self.send_message(chat_id, "Lệnh này chỉ dành cho quản trị viên.")
+            elif cmd == "/themgv":
+                self._cmd_themgv(chat_id, user_id, args)
+            elif cmd == "/xoagv":
+                self._cmd_xoagv(chat_id, user_id, args)
+            else:
+                self._cmd_dsgv(chat_id)
         elif cmd == "/taolink":
             self._cmd_taolink(chat_id, user_id, args)
         elif cmd == "/taolop":
@@ -611,7 +663,7 @@ class TuVanBot:
             self.send_message(chat_id, f"Lệnh không nhận dạng được: {cmd}. Gõ /trogiup để xem hướng dẫn.")
 
     # ---- Các lệnh chi tiết ----
-    def _cmd_help(self, chat_id):
+    def _cmd_help(self, chat_id, user_id=""):
         help_text = (
             "Chào Thầy/Cô! Đây là hệ thống Bot hỗ trợ tư vấn chọn môn lớp 10 dành cho giáo viên.\n\n"
             "Các lệnh có thể sử dụng:\n"
@@ -625,9 +677,81 @@ class TuVanBot:
             "• /theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5 [ghichu=...] : Ghi nhận theo dõi Bước 7 (đợt: giuahk1, hk1, giuahk2, cuoinam, hk1-11, cn11, hk1-12)\n"
             "• /xuat [lớp] : Xuất file CSV danh sách tổng hợp (đã lọc dữ liệu riêng tư)\n"
             "• /thuhoi <mã HS> : Thu hồi toàn bộ mã mời còn hạn của học sinh\n"
+            "• /myid : Xem ID Telegram của mình\n"
             "• /trogiup : Xem lại hướng dẫn này"
         )
+        if self.is_admin(user_id):
+            help_text += (
+                "\n\nQuản trị viên:\n"
+                "• /themgv <ID> [ghi chú] : Cấp quyền cho giáo viên (người đó gõ /myid với bot để lấy ID)\n"
+                "• /xoagv <ID> : Thu hồi quyền của giáo viên đã thêm\n"
+                "• /dsgv : Danh sách giáo viên và quản trị viên"
+            )
         self.send_message(chat_id, help_text)
+
+    # ---- Quản trị: thêm / xoá / xem giáo viên ----
+    def _cmd_themgv(self, chat_id, user_id, args):
+        if not args or not TELEGRAM_ID_RE.match(args[0]):
+            self.send_message(
+                chat_id,
+                "Cú pháp: /themgv <ID Telegram> [ghi chú]\nVí dụ: /themgv 123456789 Cô Lan - GVCN 10A1\n"
+                "Giáo viên mở bot, gõ /myid để lấy ID rồi gửi cho Thầy/Cô."
+            )
+            return
+        new_id = args[0]
+        note = "".join(ch for ch in " ".join(args[1:]) if ch.isprintable())[:60].strip()
+        if new_id in self.teacher_ids or new_id in self.admin_ids:
+            self.send_message(chat_id, f"ID {new_id} đã có quyền (khai báo trong tuvan.env).")
+            return
+        with self._lock:
+            items = self.load_added_teachers()
+            if any(str(t["id"]) == new_id for t in items):
+                self.send_message(chat_id, f"ID {new_id} đã có trong danh sách giáo viên.")
+                return
+            items.append({"id": new_id, "note": note, "addedBy": str(user_id),
+                          "addedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+            self.save_added_teachers(items)
+        sys.stderr.write(f"Quản trị {user_id} đã thêm giáo viên {new_id}\n")
+        try:
+            self.send_message(new_id, "Thầy/Cô đã được cấp quyền dùng bot tư vấn chọn môn lớp 10. Gõ /trogiup để xem các lệnh.")
+            told = "Đã nhắn báo cho giáo viên."
+        except Exception:
+            told = "Chưa nhắn báo được (giáo viên cần mở bot và bấm Start trước). Quyền vẫn đã được cấp."
+        self.send_message(chat_id, f"✅ Đã thêm giáo viên {new_id}{(' – ' + note) if note else ''}.\n{told}")
+
+    def _cmd_xoagv(self, chat_id, user_id, args):
+        if not args or not TELEGRAM_ID_RE.match(args[0]):
+            self.send_message(chat_id, "Cú pháp: /xoagv <ID Telegram>. Gõ /dsgv để xem danh sách.")
+            return
+        rm_id = args[0]
+        if rm_id in self.teacher_ids or rm_id in self.admin_ids:
+            self.send_message(chat_id, f"ID {rm_id} được khai báo trong tuvan.env trên máy chủ, không xoá được qua bot.")
+            return
+        with self._lock:
+            items = self.load_added_teachers()
+            kept = [t for t in items if str(t["id"]) != rm_id]
+            if len(kept) == len(items):
+                self.send_message(chat_id, f"Không có ID {rm_id} trong danh sách giáo viên đã thêm.")
+                return
+            self.save_added_teachers(kept)
+        sys.stderr.write(f"Quản trị {user_id} đã xoá giáo viên {rm_id}\n")
+        self.send_message(chat_id, f"✅ Đã thu hồi quyền của {rm_id}. Người này không dùng bot và không nhận thông báo nữa.")
+
+    def _cmd_dsgv(self, chat_id):
+        lines = ["Quản trị viên (tuvan.env):"]
+        lines += [f"• {i}" for i in sorted(self.admin_ids)] or ["• (chưa có)"]
+        env_only = sorted(self.teacher_ids - self.admin_ids)
+        if env_only:
+            lines.append("Giáo viên khai báo trong tuvan.env:")
+            lines += [f"• {i}" for i in env_only]
+        items = self.load_added_teachers()
+        lines.append(f"Giáo viên thêm qua bot ({len(items)}):")
+        for t in items:
+            note = f" – {t.get('note')}" if t.get("note") else ""
+            lines.append(f"• {t['id']}{note} (thêm {vn_time(t.get('addedAt', ''), False)})")
+        if not items:
+            lines.append("• (chưa có) – dùng /themgv <ID> [ghi chú]")
+        self.send_message(chat_id, "\n".join(lines))
 
     def _cmd_taolop(self, chat_id, user_id, args):
         if len(args) < 2:
@@ -1161,7 +1285,7 @@ class TuVanBot:
                         if ev.get("type") == "submit":
                             created_by = str(ev.get("createdBy", ""))
                             # Nếu giáo viên tạo mã mời bằng Telegram ID
-                            if created_by in self.teacher_ids:
+                            if created_by in self.all_teacher_ids():
                                 c = ev.get("code", "")
                                 cl = ev.get("className", "")
                                 cl_txt = f" ({cl})" if cl else ""
@@ -1228,7 +1352,7 @@ def main():
         sys.stderr.write("Vui lòng tạo bot ở @BotFather và điền token vào server/tuvan.env.\n")
         sys.exit(1)
 
-    if not TEACHER_TELEGRAM_IDS:
+    if not TEACHER_TELEGRAM_IDS and not ADMIN_TELEGRAM_IDS:
         sys.stderr.write("Cảnh báo: TEACHER_TELEGRAM_IDS đang trống. Chưa có giáo viên nào được cấp quyền dùng bot.\n")
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)

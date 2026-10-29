@@ -107,6 +107,20 @@ pip install -r server/requirements-bot.txt
 | `/theodoi` | `/theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5 [ghichu=...]` (đợt: giuahk1, hk1, giuahk2, cuoinam, hk1-11, cn11, hk1-12; điểm là số nguyên 1–5) | `/theodoi HS001 hk1 hailong=4 cangthang=2 ghichu=tien_bo` | Ghi nhận kết quả theo dõi Bước 7 sau buổi tư vấn. |
 | `/xuat` | `/xuat [lớp]` | `/xuat 10A1` | Xuất file `.csv` tổng hợp danh sách học sinh (mở được bằng Excel). |
 | `/thuhoi` | `/thuhoi <mã HS>` | `/thuhoi HS001` | Thu hồi toàn bộ mã mời khảo sát còn hạn của học sinh. |
+| `/myid` | `/myid` | `/myid` | Ai cũng dùng được: bot trả lại ID Telegram của người gõ. |
+
+### Quản trị viên: thêm giáo viên bằng ID
+
+Quản trị viên là các ID trong `ADMIN_TELEGRAM_IDS` (để trống thì là các ID trong `TEACHER_TELEGRAM_IDS`). Chỉ quản trị viên thấy và dùng được 3 lệnh sau; không cần sửa `tuvan.env` hay khởi động lại bot.
+
+| Lệnh | Ví dụ | Ý nghĩa |
+|---|---|---|
+| `/themgv <ID> [ghi chú]` | `/themgv 123456789 Cô Lan - GVCN 10A1` | Cấp quyền cho giáo viên. Bot nhắn báo cho giáo viên nếu họ đã bấm Start với bot. |
+| `/xoagv <ID>` | `/xoagv 123456789` | Thu hồi quyền: người đó không dùng bot và không nhận thông báo nộp bài nữa. |
+| `/dsgv` | `/dsgv` | Xem quản trị viên, giáo viên khai báo trong `tuvan.env` và giáo viên thêm qua bot. |
+
+Cách làm: giáo viên mở bot, bấm **Start** (bot báo "chưa được cấp quyền" kèm ID của họ), gửi ID cho quản trị viên; quản trị viên gõ `/themgv <ID>`.
+Lưu ý: ID khai báo trong `tuvan.env` không xoá được qua bot. Danh sách thêm qua bot lưu ở `~/web-demo-data/teachers.json` (cùng chỗ dữ liệu, được sao lưu cùng). Mọi giáo viên được cấp quyền đều xem được hồ sơ của tất cả học sinh, nên chỉ thêm người thực sự tham gia tư vấn.
 
 ---
 

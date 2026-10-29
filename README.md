@@ -31,7 +31,7 @@ Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh
 | Khu vực giáo viên | Nút **Giáo viên**: danh mục hồ sơ (tìm, mở, xoá), nhập kết quả Google Form (.csv/.xlsx) khớp theo Mã học sinh, cơ sở dữ liệu trường. Mở file trực tiếp: lưu trên trình duyệt máy đó. Mở qua máy chủ: cần mật khẩu, dữ liệu dùng chung. Mẫu câu hỏi: `docs/MAU-GOOGLE-FORM.md` |
 | Trợ lý tư vấn | Trả lời theo bộ câu hỏi có sẵn (quy định, tổ hợp, ngành nghề, gợi ý tổ hợp…), xưng hô theo vai trò, phản hồi an toàn khi có dấu hiệu khủng hoảng (111, 115) |
 | Khảo sát tại nhà | Mở link mời `/?moi=…` (hoặc quét QR) trên điện thoại, không cần Telegram hay tài khoản: đồng ý (cha mẹ + học sinh) → Bước 1 → Bước 2 → **Nộp cho giáo viên**; lưu nháp trên máy, nộp lại được tới khi hết hạn. **Chỉ chạy khi mở qua máy chủ của trường** (Tailscale Funnel); trên GitHub Pages hoặc mở file trực tiếp, link mời báo không dùng được |
-| Bot Telegram giáo viên | Tạo mã mời 1 em (`/taolink`) hoặc cả lớp (`/taolop` xuất PDF in A4 8 ô/trang + CSV); thông báo nộp bài; tóm tắt hồ sơ an toàn (`/hoso`); cảnh báo (`/canhbao`); theo dõi (`/theodoi`); xuất CSV (`/xuat`) |
+| Bot Telegram giáo viên | Tạo mã mời 1 em (`/taolink`) hoặc cả lớp (`/taolop` xuất PDF in A4 8 ô/trang + CSV); quản trị viên thêm/xoá giáo viên bằng ID (`/themgv`, `/xoagv`, `/dsgv`; giáo viên lấy ID bằng `/myid`); thông báo nộp bài; tóm tắt hồ sơ an toàn (`/hoso`); cảnh báo (`/canhbao`); theo dõi (`/theodoi`); xuất CSV (`/xuat`) |
 
 Mẹo khi thử: ở mỗi bài trắc nghiệm có nút **“Điền ngẫu nhiên (để thử demo)”** để đi nhanh qua các bước (có hỏi lại trước khi ghi đè; không hiện trong khảo sát tại nhà).
 

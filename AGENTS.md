@@ -38,7 +38,7 @@ Người dùng chính là học sinh lớp 10 (chưa thành niên), cha mẹ và
 
 ## 5. Trước khi đề xuất commit
 ```bash
-python3 -m unittest discover -s server/tests      # phải đạt toàn bộ (hiện 49 bài)
+python3 -m unittest discover -s server/tests      # phải đạt toàn bộ (hiện 58 bài)
 for f in server/*.sh; do bash -n "$f"; done      # cú pháp từng script
 python3 server/tests/e2e_khao_sat.py              # kịch bản trình duyệt (cần Playwright + Chromium), khi sửa web
 ```
