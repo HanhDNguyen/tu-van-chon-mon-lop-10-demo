@@ -70,7 +70,9 @@ while true; do
     printf "  Dán TUVAN_BOT_TOKEN (từ @BotFather, gõ ẩn rồi Enter): " > $TTY
     read -rs TOKEN < $TTY; echo > $TTY
   fi
-  echo "$TOKEN" | grep -Eq '^[0-9]{6,}:[A-Za-z0-9_-]{30,}$' || { warn "Token không đúng dạng 123456:ABC..."; TOKEN=""; continue; }
+  TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]"'"'")"      # bỏ khoảng trắng và dấu nháy dán thừa
+  # Chỉ kiểm tra sơ bộ (số, dấu hai chấm, phần còn lại không có khoảng trắng). Telegram quyết định token đúng hay sai.
+  printf '%s' "$TOKEN" | grep -Eq '^[0-9]+:[^[:space:]]{10,}$' || { warn "Chưa giống token Telegram (dạng SỐ:CHUỖI). Nhập lại."; TOKEN=""; continue; }
   ME="$(printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TOKEN" | curl -s --max-time 15 -K - || true)"
   UNAME="$(printf '%s' "$ME" | python3 -c 'import sys,json
 try:
