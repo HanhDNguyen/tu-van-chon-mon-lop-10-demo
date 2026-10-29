@@ -1,0 +1,7 @@
+# Luôn lưu và lấy ra với xuống dòng LF (script .sh chạy trên Mac/Linux)
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.png binary
+*.pdf binary
+*.bundle binary

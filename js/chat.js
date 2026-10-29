@@ -81,7 +81,7 @@
     add("user", text); history.push({ role: "user", content: text });
     const t = norm(text);
     // An toàn luôn xử lý tại chỗ trước
-    if (isCrisis(t)) { say(crisisReply(), "alert"); return; }
+    if (isCrisis(t, text)) { say(crisisReply(), "alert"); return; }
     if (CFG.apiUrl) {
       const typing = add("bot", "Đang soạn câu trả lời…", "typing");
       try {
@@ -102,9 +102,20 @@
   }
 
   /* ---------- An toàn ---------- */
-  function isCrisis(t) {
-    return has(t, ["tu tu", "tu sat", "muon chet", "khong muon song", "chan song", "tu hai", "tu lam hai", "cat tay", "rach tay", "ket thuc cuoc doi",
-      "bi danh", "bi bao luc", "bi xam hai", "bi quay roi", "bi de doa", "bi bat nat", "tram cam", "khong muon ton tai"]);
+  // So khớp theo TỪ TRỌN VẸN (không khớp chuỗi con) – tránh báo động giả kiểu "tư tưởng" → "tu tu", "bị đánh giá" → "bi danh".
+  // Danh sách cần chuyên gia tâm lý học đường duyệt (báo cáo audit 29/10/2026, A13).
+  const wordHas = (t, w) => new RegExp("(^|[^a-z0-9])" + w.replace(/ /g, "\\s+") + "(?![a-z0-9])").test(t);
+  const CRISIS = ["tu sat", "muon chet", "khong muon song", "chan song", "tu hai", "tu lam hai", "cat tay", "rach tay", "ket thuc cuoc doi",
+    "bi bao luc", "bi xam hai", "bi quay roi", "bi de doa", "bi bat nat", "tram cam", "khong muon ton tai", "muon bien mat", "bien mat khoi the gioi"];
+  function isCrisis(t, raw) {
+    const r = String(raw || "").toLowerCase().normalize("NFC");
+    const hasMarks = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/.test(r);
+    if (CRISIS.some(w => wordHas(t, w))) return true;
+    // "tự tử": có dấu thì chỉ nhận đúng "tự tử" (không nhận "từ từ", "tư tưởng"); gõ không dấu thì nhận "tu tu" đứng riêng
+    if (hasMarks ? /tự\s*tử/.test(r) : wordHas(t, "tu tu")) return true;
+    // "bị đánh" nhưng không phải "bị đánh giá"
+    if (hasMarks ? /bị\s+đánh(?!\s*giá)/.test(r) : (wordHas(t, "bi danh") && !wordHas(t, "bi danh gia"))) return true;
+    return false;
   }
   function crisisReply() {
     const w = who();

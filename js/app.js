@@ -24,10 +24,16 @@
   }
   const safeGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const safeSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } };
+  // Chỉ duyệt khoá riêng và bỏ __proto__/constructor/prototype: dữ liệu mở lại (hồ sơ, mã hồ sơ, bài nộp tại nhà)
+  // không được làm thay đổi Object.prototype của trình duyệt (lỗi A2 trong báo cáo audit 29/10/2026).
+  const BAD_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   function merge(base, src) {
-    for (const k in src) {
-      if (src[k] && typeof src[k] === "object" && !Array.isArray(src[k]) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) merge(base[k], src[k]);
-      else base[k] = src[k];
+    if (!src || typeof src !== "object") return base;
+    for (const k of Object.keys(src)) {
+      if (BAD_KEYS.has(k)) continue;
+      const v = src[k];
+      if (v && typeof v === "object" && !Array.isArray(v) && Object.prototype.hasOwnProperty.call(base, k) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) merge(base[k], v);
+      else base[k] = v;
     }
     return base;
   }
@@ -44,12 +50,19 @@
     s.v = 2;
     return s;
   }
+  /* ===== Khảo sát tại nhà: mở bằng link mời ?moi=<mã>; bài làm lưu ở khoá riêng, không trộn với hồ sơ thường ===== */
+  const HOME = (() => {
+    let t = ""; try { t = new URLSearchParams(location.search).get("moi") || ""; } catch (e) { /* bỏ qua */ }
+    t = /^[A-Za-z0-9_-]{8,100}$/.test(t) ? t : "";
+    return { token: t, status: t ? "checking" : "off", info: null, key: t ? "ctv_home_" + t.slice(0, 8) : "", busy: false, error: "" };
+  })();
+  const STORE_KEY = HOME.key || KEY;
   function load() {
-    try { const raw = safeGet(KEY); if (raw) { const s = upgrade(JSON.parse(raw)); if (s && s.v === 2) return merge(blankState(), s); } } catch (e) { /* bỏ qua */ }
+    try { const raw = safeGet(STORE_KEY); if (raw) { const s = upgrade(JSON.parse(raw)); if (s && s.v === 2) return merge(blankState(), s); } } catch (e) { /* bỏ qua */ }
     return blankState();
   }
   let S = load();
-  function save() { safeSet(KEY, JSON.stringify(S)); }
+  function save() { safeSet(STORE_KEY, JSON.stringify(S)); }
 
   /* ================= MÁY CHỦ (khi web được mở qua trạm trung gian) ================= */
   const SRV = { on: false, info: null, schools: [], token: (() => { try { return sessionStorage.getItem(KEY_TOKEN) || ""; } catch (e) { return ""; } })() };
@@ -341,6 +354,7 @@
     return false;
   }
   function renderSteps() {
+    if (HOME.token) { renderHomeSteps(); return; }
     $("#steps").innerHTML = "<ol>" + STEPS.map(st => { const d = stepDone(st.n); return `<li><button type="button" class="step-btn ${S.step === st.n ? "current" : ""}" data-go="${st.n}" ${S.step === st.n ? 'aria-current="step"' : ""}>
       <span class="step-num">${st.n}${d ? '<span class="step-done" title="Đã có dữ liệu">✓</span>' : ""}</span><span class="step-label">${esc(st.t)}<small>${esc(st.s)}</small></span></button></li>`; }).join("") + "</ol>";
     const pill = $("#rolePill");
@@ -348,7 +362,8 @@
     const tb = $("#teacherBtn"); if (tb) tb.textContent = SRV.on && SRV.token ? "Giáo viên ✓" : "Giáo viên";
   }
   const stepHead = (n, title, desc) => `<div class="step-head"><span class="big-num" aria-hidden="true">${n}</span><div><h2>Bước ${n}: ${esc(title)}</h2><p>${desc}</p></div></div>`;
-  const navRow = (prev, next, nextLabel) => `<div class="nav-row">${prev != null ? `<button class="btn ghost" type="button" data-go="${prev}">Quay lại</button>` : "<span></span>"}${next != null ? `<button class="btn" type="button" data-go="${next}">${esc(nextLabel || "Sang bước " + next)}</button>` : ""}</div>`;
+  const navRow = (prev, next, nextLabel) => { if (HOME.token && next === 3) { next = 9; nextLabel = "Sang bước nộp cho giáo viên"; } return navRowHTML(prev, next, nextLabel); };
+  const navRowHTML = (prev, next, nextLabel) => `<div class="nav-row">${prev != null ? `<button class="btn ghost" type="button" data-go="${prev}">Quay lại</button>` : "<span></span>"}${next != null ? `<button class="btn" type="button" data-go="${next}">${esc(nextLabel || "Sang bước " + next)}</button>` : ""}</div>`;
 
   /* ================= TRANG ĐẦU ================= */
   function viewWelcome() {
@@ -407,10 +422,10 @@
       <fieldset><legend>Thông tin chung</legend>
         <div class="grid-3">
           <div class="field"><label for="f-code">Mã học sinh</label>
-            <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="f-code" type="text" data-bind="profile.code" value="${esc(p.code)}" placeholder="VD: 0123456789" autocomplete="off"><button type="button" class="btn ghost small" data-action="load-by-code" title="Mở hồ sơ đã lưu theo mã">Mở</button></div>
-            <span class="hint">Nhập tay. Dùng để lưu hồ sơ và khớp kết quả khảo sát Google Form.</span></div>
+            <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="f-code" type="text" data-bind="profile.code" value="${esc(p.code)}" placeholder="VD: 0123456789" autocomplete="off" ${HOME.token ? "readonly" : ""}>${HOME.token ? "" : '<button type="button" class="btn ghost small" data-action="load-by-code" title="Mở hồ sơ đã lưu theo mã">Mở</button>'}</div>
+            <span class="hint">${HOME.token ? "Đã điền sẵn theo link mời của nhà trường." : "Nhập tay. Dùng để lưu hồ sơ và khớp kết quả khảo sát Google Form."}</span></div>
           <div class="field"><label for="f-nick">Tên gọi</label><input id="f-nick" type="text" data-bind="profile.nickname" value="${esc(p.nickname)}" placeholder="VD: Minh"></div>
-          <div class="field"><label for="f-class">Lớp</label><input id="f-class" type="text" data-bind="profile.className" value="${esc(p.className)}" placeholder="VD: 10A3"></div>
+          <div class="field"><label for="f-class">Lớp</label><input id="f-class" type="text" data-bind="profile.className" value="${esc(p.className)}" placeholder="VD: 10A3" ${HOME.token && HOME.info && HOME.info.className ? "readonly" : ""}></div>
           <div class="field"><label for="f-school">Trường THPT</label>
             <select id="f-school" data-bind="profile.schoolId" data-rerender="1"><option value="">– Chọn trường –</option>${allSchools().map(s => `<option value="${s.id}" ${p.schoolId === s.id ? "selected" : ""}>${esc(s.name)}</option>`).join("")}<option value="__other" ${p.schoolId === "__other" ? "selected" : ""}>Trường khác…</option></select></div>
           <div class="field"><label for="f-prov">Tỉnh/thành</label><input id="f-prov" type="text" data-bind="profile.province" value="${esc(p.province)}" placeholder="VD: Hà Nội"></div>
@@ -472,6 +487,8 @@
       ${navRow(1, 3)}
     </section>`;
   }
+  // Nút "Điền ngẫu nhiên" chỉ để trình diễn: ẩn khi làm khảo sát thật qua link mời
+  const demoFillBtn = test => HOME.token ? "" : `<button type="button" class="btn ghost small" data-action="fill-demo" data-test="${test}">Điền ngẫu nhiên (để thử demo)</button>`;
   const prog = (a, t) => `<div class="progress" aria-hidden="true"><span style="width:${Math.round(a / t * 100)}%"></span></div>`;
   function testHolland(hs) {
     return `<p>Cho điểm mức độ đúng với bản thân: <b>0</b> ${D.HOLLAND_SCALE[0]} · <b>1</b> ${D.HOLLAND_SCALE[1]} · <b>2</b> ${D.HOLLAND_SCALE[2]} · <b>3</b> ${D.HOLLAND_SCALE[3]} · <b>4</b> ${D.HOLLAND_SCALE[4]}. Khoảng 15 phút.</p>
@@ -479,7 +496,7 @@
       ${D.HOLLAND.map(g => `<div class="q-group"><h4>Bảng ${g.key} – ${esc(g.name)} <span class="muted small">(${hs.sc[g.key]}/36)</span></h4>
         ${g.items.map((it, i) => `<div class="q"><span class="q-text">${i + 1}. ${esc(it)}</span><span class="scale" role="group" aria-label="${esc(it)}">${[0, 1, 2, 3, 4].map(v => `<button type="button" data-action="hol" data-k="${g.key}" data-i="${i}" data-v="${v}" data-fid="hol-${g.key}-${i}-${v}" aria-pressed="${S.tests.holland[g.key][i] === v}" title="${D.HOLLAND_SCALE[v]}">${v}</button>`).join("")}</span></div>`).join("")}
       </div>`).join("")}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="holland">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${hs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="eysenck">Tiếp: Nhân cách Eysenck</button>` : ""}</div>`;
+      <div class="row no-print">${demoFillBtn("holland")}<span class="spacer"></span>${hs.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="eysenck">Tiếp: Nhân cách Eysenck</button>` : ""}</div>`;
   }
   // Không hiện điểm từng thang khi đang làm (tài liệu MBTI dặn không xem bảng điểm trước khi làm xong)
   function testEysenck(es) {
@@ -487,14 +504,14 @@
     return `<p>Chọn <b>Có</b> nếu câu hỏi đúng với bạn, <b>Không</b> nếu không đúng. Cố gắng dùng câu trả lời đầu tiên xuất hiện trong đầu, trả lời liên tục, trung thực, không bỏ câu nào. Với câu không quen thuộc, hãy trả lời theo cách nghĩ của mình. Tốc độ khoảng 2–3 câu một phút.</p>
       ${prog(es.answered, N)}
       <div class="q-group">${D.EYSENCK.map((it, i) => `<div class="q"><span class="q-text">${i + 1}. ${esc(it)}</span><span class="scale yn" role="group" aria-label="Câu ${i + 1}">${[["+", "Có", "y"], ["-", "Không", "n"]].map(([v, l, f]) => `<button type="button" data-action="ey" data-i="${i}" data-v="${v}" data-fid="ey-${i}-${f}" aria-pressed="${S.tests.eysenck[i] === v}">${l}</button>`).join("")}</span></div>`).join("")}</div>
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="eysenck">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${es.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="mbti">Tiếp: Tính cách MBTI</button>` : ""}</div>`;
+      <div class="row no-print">${demoFillBtn("eysenck")}<span class="spacer"></span>${es.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="mbti">Tiếp: Tính cách MBTI</button>` : ""}</div>`;
   }
   function testMbti(ms) {
     const N = D.MBTI.length;
     return `<p>Mỗi câu chọn <b>một</b> phương án phù hợp hơn với bạn. Không có câu trả lời đúng hay sai; chỉ đọc và chọn, không nên phân tích quá nhiều vì sẽ khiến kết quả kém chính xác. Thời gian khoảng 20 phút.</p>
       ${prog(ms.answered, N)}
       ${D.MBTI.map(([q, a, b], i) => `<div class="mb-q"><p class="q-text"><b>Câu ${i + 1}.</b> ${esc(q)}</p><div class="ab" role="group" aria-label="Câu ${i + 1}">${[["a", a], ["b", b]].map(([x, t]) => `<button type="button" data-action="mbti" data-i="${i}" data-v="${x}" data-fid="mbti-${i}-${x}" aria-pressed="${S.tests.mbti[i] === x}">${x}. ${esc(t)}</button>`).join("")}</div></div>`).join("")}
-      <div class="row no-print"><button type="button" class="btn ghost small" data-action="fill-demo" data-test="mbti">Điền ngẫu nhiên (để thử demo)</button><span class="spacer"></span>${ms.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="result">Xem báo cáo</button>` : ""}</div>`;
+      <div class="row no-print">${demoFillBtn("mbti")}<span class="spacer"></span>${ms.done ? `<button type="button" class="btn" data-action="test-tab" data-tab="result">Xem báo cáo</button>` : ""}</div>`;
   }
   const bars = (rows, max) => `<div class="bars">${rows.map(([lab, val]) => `<div class="bar"><span>${esc(lab)}</span><span class="bar-track"><span class="bar-fill" style="width:${clamp(val / max * 100, 0, 100)}%"></span></span><span class="bar-val">${val}</span></div>`).join("")}</div>`;
   // Biểu đồ khí chất như trong tài liệu: trục ngang HN, trục dọc KOD, thang 0–24, tâm 12
@@ -806,7 +823,9 @@
       { k: "deadline", t: "Biết thời hạn và cách nộp phiếu đăng ký của trường" },
       { k: "cv68", t: "Hiểu: giữ ổn định đến hết lớp 12; chỉ đổi vào cuối năm học, cần cam kết tự bổ sung kiến thức có xác nhận của cha mẹ và Hiệu trưởng đồng ý (CV 68)" }
     ];
-    const allOk = fc && items.every(it => it.auto === false ? false : (it.auto === true || S.final.checks[it.k]));
+    // "Phù hợp ngành mục tiêu" là phép tính gợi ý, không phải quy định: chỉ cảnh báo, không chặn xác nhận (TT 13/2022 không yêu cầu)
+    const ADVISORY = new Set(["career"]);
+    const allOk = fc && items.every(it => ADVISORY.has(it.k) || (it.auto === false ? false : (it.auto === true || S.final.checks[it.k] === true)));
     return `<section class="sheet">
       ${stepHead(6, "Chốt nguyện vọng và đăng ký chính thức", "Chọn phương án cuối cùng, kiểm tra hợp lệ trước khi điền phiếu đăng ký của trường.")}
       <div class="field"><span class="label">Phương án chính</span>
@@ -816,7 +835,7 @@
       </div>
       <h3 style="margin-top:18px">Danh sách kiểm tra</h3>
       <ul class="checklist">${items.map(it => `<li>${it.auto == null ? `<input type="checkbox" id="ck-${it.k}" data-action="check" data-k="${it.k}" ${S.final.checks[it.k] ? "checked" : ""}>` : `<span aria-hidden="true" class="${it.auto ? "check" : "cross"}" style="width:20px;text-align:center">${it.auto ? "✓" : "✗"}</span>`}
-        ${it.auto == null ? `<label for="ck-${it.k}">${esc(it.t)}</label>` : `<span>${esc(it.t)}<span class="auto-flag ${it.auto ? "y" : "n"}">${it.auto ? "tự kiểm tra: đạt" : "tự kiểm tra: chưa đạt"}</span></span>`}</li>`).join("")}</ul>
+        ${it.auto == null ? `<label for="ck-${it.k}">${esc(it.t)}</label>` : `<span>${esc(it.t)}<span class="auto-flag ${it.auto ? "y" : "n"}">${it.auto ? "tự kiểm tra: đạt" : ADVISORY.has(it.k) ? "tự kiểm tra: chưa đạt – chỉ để lưu ý, không bắt buộc" : "tự kiểm tra: chưa đạt"}</span></span>`}</li>`).join("")}</ul>
       ${a && a.v.issues.length ? a.v.issues.map(t => `<div class="callout bad"><p>${esc(t)}</p></div>`).join("") : ""}
       ${a && a.disliked.length ? `<div class="callout warn"><p>Phương án có môn ${T("bạn", "học sinh")} không muốn học: ${esc(a.disliked.map(subjName).join(", "))}.</p></div>` : ""}
       <div class="row" style="margin-top:16px">
@@ -1140,13 +1159,102 @@
     } catch (e) { toast("Không xoá được: " + e.message); }
   }
 
+  /* ================= KHẢO SÁT TẠI NHÀ (link mời ?moi=) ================= */
+  const HOME_STEPS = [0, 1, 2, 9];
+  const homeConsented = () => !!S.homeConsent && S.homeConsent.parent === true && S.homeConsent.student === true;
+  const fmtDay = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("vi-VN"); };
+  const fmtTime = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }); };
+  async function initHome() {
+    if (!SRV.on) { HOME.status = "noserver"; return; }
+    try {
+      const info = await api("/api/invite/" + encodeURIComponent(HOME.token));
+      HOME.info = info; HOME.status = "ok";
+      S.profile.code = info.code; if (info.className) S.profile.className = info.className;
+      if (!HOME_STEPS.includes(S.step) || !homeConsented()) S.step = 0;
+      save();
+    } catch (e) { HOME.status = "invalid"; }
+  }
+  function renderHomeSteps() {
+    const pill = $("#rolePill"); if (S.role) { pill.hidden = false; pill.textContent = ROLE_NAME[S.role]; } else pill.hidden = true;
+    if (HOME.status !== "ok") { $("#steps").innerHTML = ""; return; }
+    const es = eysenckStats(), ms = mbtiStats();
+    const items = [[0, "Đồng ý tham gia", "Cha mẹ và học sinh", homeConsented()],
+      [1, "Dữ liệu nền", "Bước 1", !!(S.profile.nickname || Object.keys(S.profile.grades).length)],
+      [2, "Trắc nghiệm", "Bước 2 – Holland, Eysenck, MBTI", hollandStats().done && es.done && ms.done],
+      [9, "Nộp cho giáo viên", "Gửi về nhà trường", !!S.homeSent]];
+    $("#steps").innerHTML = "<ol>" + items.map(([n, t, sub, done], i) => { const dis = n !== 0 && !homeConsented();
+      return `<li><button type="button" class="step-btn ${S.step === n ? "current" : ""}" data-go="${n}" ${S.step === n ? 'aria-current="step"' : ""} ${dis ? "disabled" : ""}>
+      <span class="step-num">${i + 1}${done ? '<span class="step-done" title="Đã xong">✓</span>' : ""}</span><span class="step-label">${esc(t)}<small>${esc(sub)}</small></span></button></li>`; }).join("") + "</ol>";
+  }
+  function viewHomeStatus() {
+    const m = {
+      checking: ["Đang kiểm tra link…", "Vui lòng chờ trong giây lát."],
+      noserver: ["Link này cần mở qua địa chỉ của nhà trường", "Trang đang mở là bản trình diễn hoặc file trên máy, không nhận bài nộp. Hãy mở đúng link (hoặc quét lại mã QR) mà giáo viên gửi."],
+      invalid: ["Link không còn hiệu lực", "Link sai, đã hết hạn hoặc đã bị thu hồi. Vui lòng liên hệ giáo viên chủ nhiệm để nhận link mới."]
+    }[HOME.status] || ["", ""];
+    return `<section class="sheet"><h2>${esc(m[0])}</h2><p>${esc(m[1])}</p>${HOME.status !== "checking" ? `<p><a class="btn ghost" href="${esc(location.pathname)}">Mở cổng tư vấn thông thường</a></p>` : ""}</section>`;
+  }
+  function viewHomeConsent() {
+    const c = S.homeConsent || {}, info = HOME.info || {};
+    return `<section class="sheet">
+      <div class="step-head"><span class="big-num" aria-hidden="true">✓</span><div><h2>Khảo sát tại nhà trước buổi tư vấn chọn môn</h2>
+        <p>Mã học sinh <b>${esc(info.code)}</b>${info.className ? " · Lớp " + esc(info.className) : ""}${info.schoolName ? " · " + esc(info.schoolName) : ""}${info.expiresAt ? " · Link dùng đến hết ngày " + esc(fmtDay(info.expiresAt)) : ""}.</p></div></div>
+      <div class="callout info"><h4>Thông tin cho cha mẹ và học sinh</h4><ul class="consent-list">
+        <li><b>Mục đích:</b> giúp giáo viên tư vấn chọn 4 môn học lựa chọn lớp 10 nhanh và sát với em hơn.</li>
+        <li><b>Gồm 2 phần:</b> Bước 1 – kết quả học tập lớp 9, sở thích môn, nguyện vọng (các câu về điều kiện gia đình, sức khoẻ có thể bỏ qua); Bước 2 – trắc nghiệm Holland, Eysenck, MBTI (khoảng 45–60 phút, có thể làm nhiều lần).</li>
+        <li><b>Ai được xem:</b> chỉ giáo viên tư vấn của nhà trường. Thông báo gửi cho giáo viên chỉ có mã học sinh và kết quả trắc nghiệm dạng tóm tắt, không có thông tin sức khoẻ, kinh tế hay nguyện vọng.</li>
+        <li><b>Không cần</b> họ tên đầy đủ, địa chỉ, số điện thoại. Bài làm dở được giữ trên máy này; có thể dừng bất cứ lúc nào.</li>
+        <li>Muốn xem, sửa hoặc xoá dữ liệu đã nộp: liên hệ giáo viên chủ nhiệm.</li>
+        <li>Kết quả trắc nghiệm chỉ để tham khảo, không phải chẩn đoán. Quyết định chọn môn thuộc về học sinh và gia đình.</li></ul></div>
+      <fieldset><legend>Đồng ý tham gia (cần cả hai)</legend>
+        <label class="check-row"><input type="checkbox" data-action="home-consent" data-k="parent" ${c.parent ? "checked" : ""}> <span>Tôi là cha mẹ/người giám hộ của học sinh, đã đọc thông tin trên và đồng ý cho con tham gia.</span></label>
+        <label class="check-row"><input type="checkbox" data-action="home-consent" data-k="student" ${c.student ? "checked" : ""}> <span>Em là học sinh, em đã hiểu và đồng ý tham gia.</span></label>
+      </fieldset>
+      <h3>Ai đang điền?</h3>
+      <div class="role-cards">${["hs", "ph"].map(r => `<button type="button" class="role-card" data-action="role" data-role="${r}" aria-pressed="${S.role === r}"><strong>${ROLE_NAME[r]}</strong><span>${{ hs: "Em tự làm, có cha mẹ ở bên", ph: "Cha mẹ cùng con làm" }[r]}</span></button>`).join("")}</div>
+      <div class="nav-row"><span></span><button class="btn" type="button" data-go="1" ${homeConsented() ? "" : "disabled"}>Bắt đầu Bước 1</button></div>
+      ${homeConsented() ? "" : '<p class="small muted">Cần đánh dấu cả hai ô đồng ý để bắt đầu.</p>'}
+    </section>`;
+  }
+  function viewHomeSubmit() {
+    const miss = missingFields().filter(m => m.step <= 2), hs = hollandStats(), es = eysenckStats(), ms = mbtiStats();
+    return `<section class="sheet">
+      <div class="step-head"><span class="big-num" aria-hidden="true">✓</span><div><h2>Nộp cho giáo viên</h2><p>Kiểm tra lại rồi bấm Nộp. Trước khi link hết hạn vẫn sửa và nộp lại được; lần nộp sau thay cho lần trước.</p></div></div>
+      <div class="callout info"><h4>Đã làm</h4><p>Mã HS: <b>${esc(S.profile.code)}</b> · Tên gọi: ${esc(S.profile.nickname || "–")}<br>Holland ${hs.answered}/54 câu · Eysenck ${es.answered}/${D.EYSENCK.length} câu · MBTI ${ms.answered}/${D.MBTI.length} câu</p></div>
+      ${miss.length ? `<div class="callout warn"><h4>Còn ${miss.length} mục chưa đầy đủ</h4><ul class="small">${miss.map(m => `<li>Bước ${m.step}: ${esc(m.t)}</li>`).join("")}</ul><p class="small">Vẫn nộp được; giáo viên sẽ hỏi thêm ở buổi tư vấn.</p></div>` : `<div class="callout ok"><p>Đã đủ thông tin Bước 1 và Bước 2.</p></div>`}
+      ${S.homeSent ? `<div class="callout ok"><h4>Đã gửi cho giáo viên lúc ${esc(fmtTime(S.homeSent))}</h4><p>Hẹn gặp ở buổi tư vấn. Nếu sửa câu trả lời, hãy bấm “Nộp lại”.</p></div>` : ""}
+      ${HOME.error ? `<div class="callout bad" role="alert"><p>${esc(HOME.error)}</p></div>` : ""}
+      <div class="nav-row"><button class="btn ghost" type="button" data-go="2">Quay lại</button><button class="btn ok" type="button" data-action="home-submit" ${HOME.busy ? "disabled" : ""}>${HOME.busy ? "Đang gửi…" : S.homeSent ? "Nộp lại cho giáo viên" : "Nộp cho giáo viên"}</button></div>
+    </section>`;
+  }
+  async function homeSubmit() {
+    if (HOME.busy) return;
+    if (!homeConsented()) { go(0); return; }
+    HOME.busy = true; HOME.error = ""; render();
+    try {
+      const r = await api("/api/submit/" + encodeURIComponent(HOME.token), { method: "POST",
+        body: JSON.stringify({ state: { profile: S.profile, tests: S.tests }, consent: { parent: true, student: true } }) });
+      S.homeSent = (r && r.submittedAt) || new Date().toISOString(); save(); toast("Đã gửi cho giáo viên");
+    } catch (e) { HOME.error = "Chưa gửi được (" + e.message + "). Bài làm vẫn được giữ trên máy này – hãy thử lại."; }
+    HOME.busy = false; render();
+  }
+  function currentView() {
+    if (HOME.token) {
+      if (HOME.status !== "ok") return viewHomeStatus();
+      if (S.step !== 0 && !homeConsented()) S.step = 0;
+      return ({ 0: viewHomeConsent, 1: viewStep1, 2: viewStep2, 9: viewHomeSubmit }[S.step] || viewHomeConsent)();
+    }
+    return (VIEWS[S.step] || viewWelcome)();
+  }
+
   /* ================= RENDER ================= */
   const VIEWS = { 0: viewWelcome, 1: viewStep1, 2: viewStep2, 3: viewStep3, 4: viewStep4, 5: viewStep5, 6: viewStep6, 7: viewStep7, 8: viewTeacher };
   function render(opts = {}) {
     const fid = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fid : null;
     const y = window.scrollY;
+    document.body.classList.toggle("home-mode", !!HOME.token);
     renderSteps();
-    $("#main").innerHTML = (VIEWS[S.step] || viewWelcome)();
+    $("#main").innerHTML = currentView();
     if (opts.top) { window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); } else window.scrollTo(0, y);
     if (fid) { const el = document.querySelector(`[data-fid="${fid}"]`); if (el) el.focus({ preventScroll: true }); }
     const tf = $("#trackForm"); if (tf) tf.addEventListener("submit", onTrackSubmit);
@@ -1154,7 +1262,7 @@
     const as = $("#arcSearch"); if (as) as.addEventListener("input", () => { S.ui.arcSearch = as.value; save(); fillArchive(); });
     if (S.step === 8) fillArchive();
   }
-  function go(n) { S.step = clamp(n, 0, 8); save(); render({ top: true }); document.dispatchEvent(new CustomEvent("ctv:step", { detail: S.step })); }
+  function go(n) { S.step = HOME.token ? (HOME_STEPS.includes(n) ? n : 0) : clamp(n, 0, 8); save(); render({ top: true }); document.dispatchEvent(new CustomEvent("ctv:step", { detail: S.step })); }
 
   /* ================= SỰ KIỆN ================= */
   document.addEventListener("toggle", e => {
@@ -1169,6 +1277,8 @@
     const A = b.dataset.action, ds = b.dataset;
     switch (A) {
       case "role": S.role = ds.role; save(); render(); document.dispatchEvent(new CustomEvent("ctv:role")); break;
+      case "home-consent": S.homeConsent = Object.assign({}, S.homeConsent, { [ds.k === "parent" ? "parent" : "student"]: b.checked === true }); save(); render(); break;
+      case "home-submit": homeSubmit(); break;
       case "tile": { const arr = (S.ui.heroPick = S.ui.heroPick || []); const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else if (arr.length < 4) arr.push(ds.k); save(); render(); break; }
       case "toggle-arr": { const arr = getPath(ds.path); const i = arr.indexOf(ds.k); if (i >= 0) arr.splice(i, 1); else arr.push(ds.k);
         if (i < 0) {
@@ -1180,7 +1290,10 @@
       case "hol": S.tests.holland[ds.k][+ds.i] = +ds.v; save(); render(); break;
       case "ey": S.tests.eysenck[+ds.i] = ds.v; save(); render(); break;
       case "mbti": S.tests.mbti[+ds.i] = ds.v; save(); render(); break;
-      case "fill-demo": fillDemo(ds.test); save(); render(); toast("Đã điền ngẫu nhiên để thử demo"); break;
+      case "fill-demo": {
+        const answered = ds.test === "holland" ? hollandStats().answered : ds.test === "eysenck" ? eysenckStats().answered : mbtiStats().answered;
+        if (HOME.token || (answered > 0 && !window.confirm("Bài trắc nghiệm này đã có " + answered + " câu trả lời. Điền ngẫu nhiên sẽ GHI ĐÈ toàn bộ bằng dữ liệu mẫu. Tiếp tục?"))) break;
+        fillDemo(ds.test); save(); render(); toast("Đã điền ngẫu nhiên – đây là dữ liệu mẫu, không dùng để tư vấn thật"); break; }
       case "cfb": S.careerFb[ds.name] = S.careerFb[ds.name] === ds.v ? undefined : ds.v; save(); render(); break;
       case "pick-group": S.careerGroup = S.careerGroup === ds.g ? "" : ds.g; save(); render(); break;
       case "toggle-other-groups": S.ui.showOtherGroups = !S.ui.showOtherGroups; if (!S.ui.showOtherGroups && !suitableGroups().some(x => x.g === S.careerGroup)) S.careerGroup = ""; save(); render(); break;
@@ -1287,5 +1400,5 @@
   };
 
   render();
-  detectServer().then(() => { if (SRV.on) render(); });
+  detectServer().then(async () => { if (HOME.token) await initHome(); if (SRV.on || HOME.token) render(); });
 })();

@@ -436,3 +436,14 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0; }
 details.school-entry { margin-top: 14px; padding: 12px 14px; border: 1.5px dashed var(--ink); border-radius: var(--r-m); background: #fff; }
 details.school-entry > summary { cursor: pointer; font-weight: 700; color: var(--ink); }
 details.school-entry[open] > summary { margin-bottom: 8px; }
+
+/* ===== Khảo sát tại nhà (mở bằng link mời ?moi=) ===== */
+.home-mode [data-action="save-profile"],
+.home-mode [data-action="open-profile-code"],
+.home-mode #teacherBtn,
+.home-mode .diagram-fab { display: none !important; }
+.consent-list { margin: 8px 0 0; padding-left: 20px; }
+.consent-list li { margin: 6px 0; }
+.check-row { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; line-height: 1.5; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+input[readonly] { background: var(--paper); color: inherit; opacity: .85; }

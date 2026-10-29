@@ -1,30 +1,33 @@
 #!/bin/bash
-# Khởi động trạm trung gian "Cổng thông tin tư vấn học sinh" trên Mac.
+# Khởi động máy chủ "Cổng thông tin tư vấn học sinh" trên Mac.
 # © 2026 Dr. Duyen Nguyen. All rights reserved.
-# - Tự đọc API_SERVER_KEY từ ~/.hermes/profiles/tuvan/.env (không cần dán khóa)
-# - Đọc thêm cấu hình trong server/tuvan.env (PUBLIC_ORIGIN, TEACHER_PASSWORD, DATA_DIR, RATE_LIMIT, PROXY_PORT)
+# - Đọc cấu hình trong server/tuvan.env (PUBLIC_ORIGIN, TEACHER_PASSWORD, DATA_DIR, RATE_LIMIT, PROXY_PORT, BOT_SERVICE_TOKEN)
+# - Không dùng Hermes: trợ lý trên web chạy chế độ demo (trả lời theo bộ câu hỏi có sẵn).
 set -e
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 WEB="$(dirname "$DIR")"
-ENVF="$HOME/.hermes/profiles/tuvan/.env"
 
-[ -f "$DIR/tuvan.env" ] && chmod 600 "$DIR/tuvan.env" 2>/dev/null; [ -f "$DIR/tuvan.env" ] && set -a && . "$DIR/tuvan.env" && set +a
-
-KEY="$(grep -E '^API_SERVER_KEY=' "$ENVF" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
-if [ -z "$KEY" ]; then
-  echo "Chưa có API_SERVER_KEY trong $ENVF – trợ lý trên web sẽ chạy chế độ demo (xem HUONG-DAN-KET-NOI-HERMES.md)"
+if [ -f "$DIR/tuvan.env" ]; then
+  chmod 600 "$DIR/tuvan.env" 2>/dev/null || true
+  set -a; . "$DIR/tuvan.env"; set +a
+else
+  echo "Chưa có server/tuvan.env – chạy với cấu hình mặc định"
 fi
 [ -z "$TEACHER_PASSWORD" ] && echo "Chưa đặt TEACHER_PASSWORD trong server/tuvan.env – khu vực giáo viên trên máy chủ sẽ tắt"
 
-export HERMES_KEY="$KEY"
+# Trợ lý AI trên máy chủ đang tắt: /chat trả 503, web tự dùng chế độ demo.
+export HERMES_KEY=""
 export WEB_DIR="$WEB"
 export DATA_DIR="${DATA_DIR:-$HOME/web-demo-data}"
 export TEACHER_PASSWORD
 export ALLOWED_ORIGINS="null${PUBLIC_ORIGIN:+,$PUBLIC_ORIGIN}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+export PYTHONUNBUFFERED=1   # ghi nhật ký ngay, không giữ trong bộ đệm
 
-if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+if [ -x "$WEB/.venv/bin/python" ]; then
+  exec "$WEB/.venv/bin/python" "$DIR/tuvan_proxy.py"
+elif command -v python3 >/dev/null 2>&1; then
   exec python3 "$DIR/tuvan_proxy.py"
 else
-  exec uv run python "$DIR/tuvan_proxy.py"
+  exec python "$DIR/tuvan_proxy.py"
 fi
