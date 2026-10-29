@@ -26,6 +26,21 @@ Bot Telegram là công cụ dành riêng cho giáo viên để:
 
 ## 2. Các bước cài đặt và cấu hình
 
+### Cách nhanh trên Mac: một script làm hết
+Làm Bước 1 và Bước 2 bên dưới để có token và ID, rồi mở Terminal trên Mac:
+```bash
+mkdir -p ~/Documents/HUST/Ms.Duyen && cd ~/Documents/HUST/Ms.Duyen
+git clone -b sua-loi/audit-29-10 https://github.com/HanhDNguyen/tu-van-chon-mon-lop-10-demo.git tu-van
+bash tu-van/server/cai-dat-mac.sh
+```
+(Sau khi Pull Request được merge, dùng `-b main` thay cho `-b sua-loi/audit-29-10`.)
+
+Script sẽ: cài thư viện vào `.venv`; hỏi token (gõ ẩn) và kiểm tra với Telegram; hỏi ID giáo viên và mật khẩu khu vực giáo viên; **tự tạo `BOT_SERVICE_TOKEN`**; bật Tailscale Funnel cho cổng 8787 và **tự điền `PUBLIC_ORIGIN`**; cài máy chủ, bot và dịch vụ tự cập nhật chạy nền (launchd). Chạy lại script bao nhiêu lần cũng được.
+
+**Đồng bộ ThinkAd → Mac qua GitHub.** Mac tự lấy bản mới từ GitHub mỗi 5 phút (`server/tu-cap-nhat.sh`): chỉ cập nhật tiến thẳng, bỏ qua nếu trên Mac có sửa đổi chưa commit, chạy kiểm thử và tự quay lại bản cũ nếu lỗi. Vì vậy, sửa trên ThinkAd phải được **commit và đẩy lên GitHub** thì Mac mới nhận. Không đồng bộ thư mục này bằng OneDrive: OneDrive có thể làm hỏng `.git`, và sẽ đưa token cùng dữ liệu học sinh lên đám mây. `server/tuvan.env` và dữ liệu (`~/web-demo-data`) chỉ nằm trên Mac.
+
+Nhật ký: `~/Library/Logs/tuvan-proxy.log`, `tuvan-bot.log`, `tuvan-capnhat.log`.
+
 ### Bước 1: Tạo Bot mới qua @BotFather
 1. Mở ứng dụng Telegram, tìm kiếm tài khoản chính thức **@BotFather** (có tích xanh).
 2. Nhắn lệnh `/newbot`.
@@ -48,7 +63,8 @@ TUVAN_BOT_TOKEN=1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ
 # Danh sách ID Telegram của các giáo viên (cách nhau bởi dấu phẩy)
 TEACHER_TELEGRAM_IDS=123456789,987654321
 
-# Khoá bí mật nội bộ kết nối với máy chủ (tự đặt chuỗi ngẫu nhiên dài)
+# Khoá bí mật nội bộ giữa bot và máy chủ (tự đặt chuỗi ngẫu nhiên dài; cai-dat-mac.sh tự tạo)
+# Tạo bằng: python3 -c "import secrets;print(secrets.token_urlsafe(32))"
 BOT_SERVICE_TOKEN=chuoi_khoa_dich_vu_bi_mat_128bit_random
 
 # Cổng dịch vụ nội bộ (mặc định 8788)

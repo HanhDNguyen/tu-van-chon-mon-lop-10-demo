@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Môi trường Python riêng trên Mac
+.venv

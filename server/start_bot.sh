@@ -29,7 +29,10 @@ export DATA_DIR="${DATA_DIR:-$HOME/web-demo-data}"
 export SERVICE_URL="${SERVICE_URL:-http://127.0.0.1:8788}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
-if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+WEB="$(dirname "$DIR")"
+if [ -x "$WEB/.venv/bin/python" ]; then
+  exec "$WEB/.venv/bin/python" "$DIR/tuvan_bot.py"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
   exec python3 "$DIR/tuvan_bot.py"
 else
   exec python "$DIR/tuvan_bot.py"
