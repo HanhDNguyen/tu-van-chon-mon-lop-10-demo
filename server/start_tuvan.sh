@@ -4,7 +4,7 @@
 # - Đọc cấu hình trong server/tuvan.env (PUBLIC_ORIGIN, TEACHER_PASSWORD, DATA_DIR, RATE_LIMIT, PROXY_PORT, BOT_SERVICE_TOKEN)
 # - Không dùng Hermes: trợ lý trên web chạy chế độ demo (trả lời theo bộ câu hỏi có sẵn).
 set -e
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 WEB="$(dirname "$DIR")"
 
 if [ -f "$DIR/tuvan.env" ]; then
@@ -22,6 +22,7 @@ export DATA_DIR="${DATA_DIR:-$HOME/web-demo-data}"
 export TEACHER_PASSWORD
 export ALLOWED_ORIGINS="null${PUBLIC_ORIGIN:+,$PUBLIC_ORIGIN}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+export PYTHONUNBUFFERED=1   # ghi nhật ký ngay, không giữ trong bộ đệm
 
 if [ -x "$WEB/.venv/bin/python" ]; then
   exec "$WEB/.venv/bin/python" "$DIR/tuvan_proxy.py"

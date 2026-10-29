@@ -5,7 +5,7 @@
 set -e
 umask 077   # bản sao lưu chứa hồ sơ học sinh: chỉ chủ tài khoản đọc được
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 if [ -f "$DIR/tuvan.env" ]; then
   chmod 600 "$DIR/tuvan.env" 2>/dev/null || true
   set -a

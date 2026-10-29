@@ -9,7 +9,7 @@
 #  4. Chỉ khởi động lại máy chủ và bot khi thư mục server/ thay đổi (web tĩnh đọc trực tiếp, không cần).
 # Không đụng tới server/tuvan.env, .venv và thư mục dữ liệu (đều nằm ngoài git).
 set -u
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 REPO="$(dirname "$DIR")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 ts() { date '+%Y-%m-%d %H:%M:%S'; }

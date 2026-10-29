@@ -442,6 +442,16 @@ def generate_batch_csv(items, class_name=""):
     return bio.getvalue()
 
 # ----------------- Lớp Bot Tư Vấn -----------------
+
+# Chứng chỉ HTTPS: Python cài từ python.org trên Mac không dùng kho chứng chỉ của hệ thống,
+# khiến mọi lệnh gọi Telegram lỗi CERTIFICATE_VERIFY_FAILED. Dùng certifi nếu có.
+try:
+    import ssl
+    import certifi
+    _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    _SSL_CTX = None
+
 class TuVanBot:
     def __init__(self, token=None, teacher_ids=None, service_url=None, service_token=None,
                  public_origin=None, data_dir=None, api_base=None):
@@ -478,7 +488,7 @@ class TuVanBot:
             headers = {"Content-Type": "application/json"} if data is not None else {}
             req = urllib.request.Request(url, data=body_bytes, method="POST" if data is not None else "GET", headers=headers)
 
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             res = json.loads(raw)
             if not res.get("ok"):
@@ -1201,7 +1211,10 @@ class TuVanBot:
             except Exception as e:
                 # Lỗi mạng / timeout -> chờ tăng dần (exponential backoff)
                 sleep_time = min(backoff, 30)
-                sys.stderr.write(f"Lỗi kết nối Telegram ({type(e).__name__}), thử lại sau {sleep_time}s...\n")
+                msg = str(e).replace(self.token, "<token>") if self.token else str(e)
+                sys.stderr.write(f"Lỗi kết nối Telegram ({type(e).__name__}: {msg[:200]}), thử lại sau {sleep_time}s...\n")
+                if "401" in msg or "Unauthorized" in msg:
+                    sys.stderr.write("→ Token bot sai hoặc đã bị thu hồi (Unauthorized). Sửa TUVAN_BOT_TOKEN trong server/tuvan.env.\n")
                 time.sleep(sleep_time)
                 backoff *= 2
 

@@ -10,7 +10,7 @@
 # Chạy lại bao nhiêu lần cũng được: giá trị đã điền trong server/tuvan.env được giữ nguyên.
 # Token và mật khẩu chỉ nhập trên Mac (gõ ẩn), không gửi đi đâu ngoài Telegram để kiểm tra token.
 set -e
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 REPO="$(dirname "$DIR")"
 ENVF="$DIR/tuvan.env"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -22,6 +22,35 @@ die()  { echo "  ❌ $*"; exit 1; }
 
 [ "$(uname)" = "Darwin" ] || die "Script này dành cho macOS."
 
+# macOS chặn dịch vụ chạy nền (launchd) đọc Documents, Desktop, Downloads ("Operation not permitted"),
+# nên bot và máy chủ không khởi động được nếu mã nguồn nằm ở đó. Chuyển bản chạy sang ~/tuvan-app
+# và để lại lối tắt (symlink) ở chỗ cũ: thầy vẫn mở thư mục trong Documents như bình thường.
+APP="$HOME/tuvan-app"
+case "$REPO" in
+  "$HOME/Documents"/*|"$HOME/Desktop"/*|"$HOME/Downloads"/*)
+    if [ ! -L "$REPO" ]; then
+      echo "== 0/6. Chuyển bản chạy ra ngoài Documents (yêu cầu của macOS)"
+      [ -e "$APP" ] && die "$APP đã tồn tại. Đổi tên hoặc xoá thư mục đó rồi chạy lại."
+      mv "$REPO" "$APP"
+      rm -rf "$APP/.venv"
+      ln -s "$APP" "$REPO"
+      ok "Bản chạy: $APP  ·  Lối tắt: $REPO"
+      TUVAN_LINK="$REPO" exec bash "$APP/server/cai-dat-mac.sh" "$@"
+    fi ;;
+esac
+# Thư mục cha của lối tắt (vd. ~/Documents/HUST/Ms.Duyen): thêm ghi chú để trợ lý lập trình
+# (Antigravity, Codex…) mở thư mục cha vẫn biết đọc hướng dẫn trong mã nguồn trước tiên.
+LINK="${TUVAN_LINK:-}"
+if [ -z "$LINK" ]; then  # chạy lại lần sau: tìm lối tắt đã tạo trước đó
+  for c in "$HOME/Documents/HUST/Ms.Duyen/tu-van"; do [ -L "$c" ] && LINK="$c"; done
+fi
+if [ -n "$LINK" ]; then
+  PDIR="$(dirname "$LINK")"; NAME="$(basename "$LINK")"
+  for f in AGENTS.md GEMINI.md; do
+    [ -e "$PDIR/$f" ] || printf '# Đọc trước tiên\nMã nguồn nằm trong thư mục `%s/`. Đọc `%s/AGENTS.md` trước khi làm bất cứ việc gì.\n' "$NAME" "$NAME" > "$PDIR/$f"
+  done
+fi
+
 echo "== 1/6. Kiểm tra công cụ"
 command -v git >/dev/null || die "Chưa có git. Chạy: xcode-select --install, rồi chạy lại script."
 command -v python3 >/dev/null || die "Chưa có python3. Chạy: xcode-select --install, rồi chạy lại script."
@@ -32,7 +61,7 @@ echo "== 2/6. Thư viện Python (môi trường riêng trong .venv)"
 [ -x "$REPO/.venv/bin/python" ] || python3 -m venv "$REPO/.venv"
 "$REPO/.venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
 "$REPO/.venv/bin/pip" install --quiet -r "$DIR/requirements-bot.txt" || die "Không cài được thư viện (segno, reportlab)."
-ok "segno, reportlab"
+ok "segno, reportlab, certifi"
 
 echo "== 3/6. Cấu hình server/tuvan.env"
 [ -f "$ENVF" ] || cp "$DIR/tuvan.env.example" "$ENVF"

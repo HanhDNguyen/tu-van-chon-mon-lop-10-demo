@@ -9,7 +9,7 @@
 # Không hỏi lại khi cài (dùng trong script khác): KHONG_HOI=1 bash cai-dat-tu-chay.sh
 # © 2026 Dr. Duyen Nguyen. All rights reserved.
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 LABEL_PROXY="vn.tuvan.proxy"
 LABEL_BOT="vn.tuvan.bot"
 LABEL_UPD="vn.tuvan.capnhat"

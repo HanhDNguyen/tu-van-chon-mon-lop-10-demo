@@ -3,3 +3,5 @@
 segno>=1.6.0
 # Tạo file PDF phiếu QR in A4 cho lớp học (khổ 8 ô/trang)
 reportlab>=4.0.0
+# Kho chứng chỉ HTTPS cho Python trên Mac (tránh lỗi CERTIFICATE_VERIFY_FAILED khi gọi Telegram)
+certifi>=2023.0.0

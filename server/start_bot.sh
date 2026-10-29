@@ -5,7 +5,7 @@
 # - Tự nạp biến môi trường từ server/tuvan.env
 # - Kết nối máy chủ nội bộ qua cổng SERVICE_PORT (8788)
 set -e
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd -P)"
 
 if [ -f "$DIR/tuvan.env" ]; then
   chmod 600 "$DIR/tuvan.env" 2>/dev/null || true
@@ -28,6 +28,7 @@ fi
 export DATA_DIR="${DATA_DIR:-$HOME/web-demo-data}"
 export SERVICE_URL="${SERVICE_URL:-http://127.0.0.1:8788}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+export PYTHONUNBUFFERED=1   # ghi nhật ký ngay, không giữ trong bộ đệm
 
 WEB="$(dirname "$DIR")"
 if [ -x "$WEB/.venv/bin/python" ]; then

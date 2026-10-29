@@ -39,6 +39,10 @@ Script sẽ: cài thư viện vào `.venv`; hỏi token (gõ ẩn) và kiểm tr
 
 **Đồng bộ ThinkAd → Mac qua GitHub.** Mac tự lấy bản mới từ GitHub mỗi 5 phút (`server/tu-cap-nhat.sh`): chỉ cập nhật tiến thẳng, bỏ qua nếu trên Mac có sửa đổi chưa commit, chạy kiểm thử và tự quay lại bản cũ nếu lỗi. Vì vậy, sửa trên ThinkAd phải được **commit và đẩy lên GitHub** thì Mac mới nhận. Không đồng bộ thư mục này bằng OneDrive: OneDrive có thể làm hỏng `.git`, và sẽ đưa token cùng dữ liệu học sinh lên đám mây. `server/tuvan.env` và dữ liệu (`~/web-demo-data`) chỉ nằm trên Mac.
 
+macOS không cho dịch vụ chạy nền đọc thư mục Documents, nên script chuyển bản chạy sang `~/tuvan-app` và để lại lối tắt `tu-van` trong `Ms.Duyen`. Thầy vẫn mở thư mục trong Documents như bình thường.
+
+Kiểm tra khi bot không chạy: `bash ~/tuvan-app/server/kiem-tra.sh` (không in token hay mật khẩu, có thể gửi kết quả cho người hỗ trợ).
+
 Nhật ký: `~/Library/Logs/tuvan-proxy.log`, `tuvan-bot.log`, `tuvan-capnhat.log`.
 
 ### Bước 1: Tạo Bot mới qua @BotFather
