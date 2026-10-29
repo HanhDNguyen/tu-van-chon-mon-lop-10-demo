@@ -44,4 +44,4 @@ for f in $(ls -t "$BACKUP_DIR"/du-lieu-*.tar.gz 2>/dev/null | tail -n +$((MAX_KE
 done
 
 REMAINING=$(ls -1 "$BACKUP_DIR"/du-lieu-*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
-echo "Hiện có $REMAINING bản sao lưu trong $BACKUP_DIR (đã xoá $OLD_COUNT bản cũ hơn $MAX_KEEP ngày)."
+echo "Hiện có $REMAINING bản sao lưu trong $BACKUP_DIR (đã xoá $OLD_COUNT bản cũ; chỉ giữ $MAX_KEEP bản mới nhất)."
