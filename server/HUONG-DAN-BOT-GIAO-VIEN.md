@@ -94,6 +94,10 @@ pip install -r server/requirements-bot.txt
 
 ## 3. Danh sách câu lệnh và ví dụ sử dụng
 
+> [!TIP]
+> **Gợi ý tự động khi gõ `/`:**
+> Bot đã tự động đăng ký danh sách lệnh với Telegram (`setMyCommands`). Khi Thầy/Cô gõ ký tự `/` vào khung chat (hoặc chạm vào nút biểu tượng **Menu / [ / ]** cạnh ô nhập tin nhắn trên điện thoại/máy tính), danh sách toàn bộ các câu lệnh kèm mô tả chi tiết sẽ tự động hiển thị để bấm chọn trực tiếp. Quản trị viên sẽ thấy thêm các lệnh quản trị (`/themgv`, `/xoagv`, `/dsgv`).
+
 | Lệnh | Cú pháp | Ví dụ | Ý nghĩa |
 |---|---|---|---|
 | `/start`, `/trogiup` | `/trogiup` | `/trogiup` | Xem hướng dẫn sử dụng và danh sách lệnh. |

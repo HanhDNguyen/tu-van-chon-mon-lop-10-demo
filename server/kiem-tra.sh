@@ -79,6 +79,10 @@ print("  ✅ Token đúng: bot @"+d["result"]["username"] if d.get("ok") else " 
 try: u=json.load(sys.stdin)["result"].get("url","")
 except Exception: u=""
 print("  ❌ Bot đang gắn webhook ("+u+") nên không nhận tin theo cách của máy chủ này. Gỡ: deleteWebhook" if u else "  ✅ Không có webhook")'
+  tg getMyCommands | python3 -c 'import sys,json
+try: cmds=json.load(sys.stdin).get("result",[])
+except Exception: cmds=[]
+print("  ✅ Menu lệnh Telegram: đã đăng ký " + str(len(cmds)) + " lệnh (/)" if cmds else "  ⚠️ Menu lệnh Telegram: chưa đăng ký lệnh (gõ / chưa hiện menu)")'
 else bad "Chưa có token"; fi
 
 echo "== Nhật ký gần nhất (đã che token)"

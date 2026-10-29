@@ -26,6 +26,7 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
     sent_documents = []
     updates_queue = []
     file_storage = {}
+    set_commands_history = []
 
     @classmethod
     def reset(cls):
@@ -34,6 +35,7 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
         cls.sent_documents = []
         cls.updates_queue = []
         cls.file_storage = {}
+        cls.set_commands_history = []
 
     def log_message(self, fmt, *args):
         pass
@@ -100,6 +102,14 @@ class MockTelegramHandler(BaseHTTPRequestHandler):
                 "ctype": ctype
             })
             return self._json(200, {"ok": True, "result": {"message_id": len(self.sent_documents)}})
+
+        if "setMyCommands" in path:
+            data = json.loads(body.decode("utf-8")) if body else {}
+            MockTelegramHandler.set_commands_history.append(data)
+            return self._json(200, {"ok": True, "result": True})
+
+        if "getMyCommands" in path:
+            return self._json(200, {"ok": True, "result": []})
 
         return self._json(404, {"ok": False, "description": "not found"})
 
@@ -523,6 +533,28 @@ class TestTuVanBot(unittest.TestCase):
         hs002_inv = next((x for x in res if x.get("code") == "HS002"), None)
         self.assertIsNotNone(hs002_inv)
         self.assertTrue(hs002_inv.get("revoked"))
+
+    # 17. Đăng ký danh sách lệnh bot (setMyCommands)
+    def test_17_setup_commands(self):
+        MockTelegramHandler.reset()
+        ok = self.bot.setup_commands()
+        self.assertTrue(ok)
+        self.assertGreater(len(MockTelegramHandler.set_commands_history), 0)
+        # Kiểm tra có gọi với scope all_private_chats
+        priv = [c for c in MockTelegramHandler.set_commands_history if c.get("scope", {}).get("type") == "all_private_chats"]
+        self.assertEqual(len(priv), 1)
+        cmds = priv[0].get("commands", [])
+        cmd_names = [it["command"] for it in cmds]
+        self.assertIn("taolink", cmd_names)
+        self.assertIn("taolop", cmd_names)
+        self.assertIn("danhsach", cmd_names)
+        self.assertIn("hoso", cmd_names)
+        self.assertIn("canhbao", cmd_names)
+        self.assertIn("theodoi", cmd_names)
+        self.assertIn("xuat", cmd_names)
+        self.assertIn("thuhoi", cmd_names)
+        self.assertIn("myid", cmd_names)
+        self.assertIn("trogiup", cmd_names)
 
 if __name__ == "__main__":
     unittest.main()

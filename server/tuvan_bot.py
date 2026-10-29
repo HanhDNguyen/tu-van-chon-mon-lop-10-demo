@@ -528,6 +528,49 @@ class TuVanBot:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read()
 
+    # ---- Đăng ký danh sách lệnh với Telegram (setMyCommands) ----
+    def setup_commands(self):
+        """Đăng ký danh sách lệnh với Telegram để mỗi khi người dùng gõ / thì menu lệnh tự hiện lên."""
+        teacher_cmds = [
+            {"command": "taolink", "description": "Tạo mã mời và ảnh QR cho 1 học sinh"},
+            {"command": "taolop", "description": "Tạo mã mời cả lớp (file PDF in A4 + file CSV)"},
+            {"command": "danhsach", "description": "Xem danh sách mã mời khảo sát (đã/chưa nộp)"},
+            {"command": "chuanop", "description": "Xem danh sách học sinh chưa nộp bài"},
+            {"command": "hoso", "description": "Xem tóm tắt trắc nghiệm và hồ sơ học sinh"},
+            {"command": "canhbao", "description": "Cảnh báo học sinh cần tư vấn hỗ trợ"},
+            {"command": "theodoi", "description": "Ghi nhận mức hài lòng và căng thẳng (B7)"},
+            {"command": "xuat", "description": "Xuất file CSV danh sách khảo sát"},
+            {"command": "thuhoi", "description": "Thu hồi mã mời còn hạn của học sinh"},
+            {"command": "myid", "description": "Xem ID Telegram của bạn"},
+            {"command": "trogiup", "description": "Xem hướng dẫn sử dụng và trợ giúp"},
+        ]
+        admin_cmds = teacher_cmds + [
+            {"command": "themgv", "description": "Cấp quyền cho giáo viên mới"},
+            {"command": "xoagv", "description": "Thu hồi quyền của giáo viên"},
+            {"command": "dsgv", "description": "Xem danh sách giáo viên và quản trị viên"},
+        ]
+        success = True
+        # 1. Đăng ký lệnh mặc định và cho tất cả chat riêng tư
+        for scope in [{"type": "default"}, {"type": "all_private_chats"}]:
+            try:
+                self.tg_call("setMyCommands", {"commands": teacher_cmds, "scope": scope})
+            except Exception as e:
+                success = False
+                sys.stderr.write(f"Cảnh báo: Lỗi khi đăng ký lệnh Telegram ({scope.get('type')}): {e}\n")
+
+        # 2. Đăng ký riêng cho từng quản trị viên (thêm các lệnh quản trị)
+        for aid in self.admin_ids:
+            try:
+                cid = int(aid) if str(aid).lstrip("-").isdigit() else aid
+                self.tg_call("setMyCommands", {
+                    "commands": admin_cmds,
+                    "scope": {"type": "chat", "chat_id": cid}
+                })
+            except Exception as e:
+                sys.stderr.write(f"Cảnh báo: Không thể đăng ký lệnh admin cho ID {aid}: {e}\n")
+
+        return success
+
     # ---- Service API Calls (cổng 8788) ----
     def srv_request(self, method, path, body=None):
         url = f"{self.service_url}{path}"
@@ -1313,6 +1356,10 @@ class TuVanBot:
         self.running = True
         backoff = 1
         print("Bot Telegram tư vấn bắt đầu chạy...")
+        try:
+            self.setup_commands()
+        except Exception as e:
+            sys.stderr.write(f"Cảnh báo: Không thể khởi tạo menu lệnh Telegram: {e}\n")
         while self.running:
             # 1. Kiểm tra sự kiện nộp bài mới từ events.jsonl
             self.check_events()
@@ -1357,6 +1404,15 @@ def main():
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     bot = TuVanBot()
+
+    if "--setup-commands" in sys.argv:
+        ok = bot.setup_commands()
+        if ok:
+            print("Đã thiết lập thành công danh sách lệnh bot trên Telegram.")
+            sys.exit(0)
+        else:
+            sys.stderr.write("Có lỗi xảy ra khi thiết lập danh sách lệnh bot trên Telegram.\n")
+            sys.exit(1)
 
     def _sig_handler(sig, frame):
         print("\nĐang dừng bot...")
