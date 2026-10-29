@@ -1,8 +1,9 @@
 #!/bin/bash
 # Sao lưu dữ liệu tư vấn (DATA_DIR) ra thư mục ~/web-demo-backup/
-# Nén thành file du-lieu-YYYYMMDD.tar.gz và tự động giữ 14 bản sao lưu gần nhất.
+# Nén thành file du-lieu-YYYYMMDD-HHMM.tar.gz (quyền 600, thư mục 700) và tự động giữ 14 bản sao lưu gần nhất.
 # © 2026 Dr. Duyen Nguyen. All rights reserved.
 set -e
+umask 077   # bản sao lưu chứa hồ sơ học sinh: chỉ chủ tài khoản đọc được
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$DIR/tuvan.env" ]; then
@@ -22,7 +23,8 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 
 mkdir -p "$BACKUP_DIR"
-DATE_STR="$(date +%Y%m%d)"
+chmod 700 "$BACKUP_DIR"
+DATE_STR="$(date +%Y%m%d-%H%M)"   # kèm giờ: chạy nhiều lần trong ngày không ghi đè
 BACKUP_FILE="$BACKUP_DIR/du-lieu-$DATE_STR.tar.gz"
 
 echo "Đang sao lưu $DATA_DIR -> $BACKUP_FILE..."

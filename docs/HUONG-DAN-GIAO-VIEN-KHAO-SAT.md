@@ -53,4 +53,12 @@ Mở ứng dụng Telegram, vào khung trò chuyện riêng với **Bot Tư Vấ
    - **Bước 4**: Đối chiếu với các tổ hợp môn thực tế nhà trường mở tuyển sinh.
    - **Bước 5**: Thảo luận các câu hỏi gợi ý và in **Phiếu tóm tắt H5**.
    - **Bước 6**: Chốt phương án lựa chọn chính thức và phương án dự phòng.
-4. **Định kỳ trong năm học (Bước 7)**: Giáo viên gõ lệnh `/theodoi` trên bot để ghi nhận mức độ hài lòng và căng thẳng của học sinh sau khi học tổ hợp đã chọn. Gõ `/canhbao` để phát hiện sớm các em có nguy cơ quá tải.
+4. **Định kỳ trong năm học (Bước 7)**: Giáo viên gõ lệnh `/theodoi <mã HS> <đợt> hailong=1-5 cangthang=1-5` trên bot (đợt: giuahk1, hk1, giuahk2, cuoinam, hk1-11, cn11, hk1-12) để ghi nhận mức độ hài lòng và căng thẳng của học sinh sau khi học tổ hợp đã chọn. Gõ `/canhbao` để phát hiện sớm các em có nguy cơ quá tải.
+
+---
+
+## Lưu ý quan trọng
+- Link và QR chỉ dùng được khi máy chủ của trường đang chạy và `PUBLIC_ORIGIN` trong `server/tuvan.env` là địa chỉ Tailscale Funnel của máy chủ. Mở trên GitHub Pages hoặc mở file trực tiếp, trang sẽ báo “Link này cần mở qua địa chỉ của nhà trường”.
+- Link hết hạn sau 7 ngày hoặc khi bị thu hồi (`/thuhoi`). Em nào báo “Link không còn hiệu lực” thì tạo link mới bằng `/taolink`.
+- Bài làm dở được giữ trên chính điện thoại/máy tính đã mở link; đổi máy thì phải làm lại từ đầu.
+- Bot chỉ báo kết quả trắc nghiệm khi em đã làm **đủ** câu; chưa đủ thì ghi “chưa đủ (n/N)”.

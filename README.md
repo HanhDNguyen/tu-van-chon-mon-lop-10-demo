@@ -5,7 +5,7 @@
 Bản **demo** để minh họa chức năng. Dữ liệu và bộ trắc nghiệm là bản dùng tạm, sẽ chuẩn hóa sau.
 
 ## Phiên bản
-Phiên bản hiện tại: **v2.3** (29/10/2026) – Bổ sung hệ thống Bot Telegram giáo viên, tạo mã mời và khảo sát tại nhà qua link/QR an toàn (NĐ 13/2023/NĐ-CP), tự động tạo phiếu in A4 8 ô/trang và file CSV cả lớp, nạp dịch vụ tự chạy launchd 24/7 và script sao lưu tự động. Mỗi phiên bản được giữ ở một nhánh `phien-ban/...` trên GitHub. Cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md`.
+Phiên bản hiện tại: **v2.3** (29/10/2026) – Bổ sung hệ thống Bot Telegram giáo viên, tạo mã mời và khảo sát tại nhà qua link/QR an toàn (NĐ 13/2023/NĐ-CP), tự động tạo phiếu in A4 8 ô/trang và file CSV cả lớp, nạp dịch vụ tự chạy launchd 24/7 và script sao lưu. Đã sửa các lỗi trong báo cáo audit 29/10/2026 (bảo mật, chấm điểm bot, chế độ khảo sát trên web). Mỗi phiên bản được giữ ở một nhánh `phien-ban/...` trên GitHub. Cách quay về bản cũ: `docs/QUAY-VE-PHIEN-BAN-CU.md`.
 
 Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh sách trường chỉ lưu trên máy đang dùng, trợ lý chạy chế độ demo. Khu vực giáo viên dùng chung, đăng nhập và lấy tổ hợp từ link web trường cần chạy qua máy chủ (`server/`).
 
@@ -30,10 +30,10 @@ Trên GitHub Pages, web chạy ở chế độ trình duyệt: hồ sơ và danh
 | 7. Theo dõi | Mô tả 5 mức hài lòng và căng thẳng, nhập theo kỳ, cảnh báo sớm, hướng dẫn đổi môn theo CV 68, **Lưu hồ sơ** (báo mục còn thiếu nhưng vẫn lưu) → **H7** |
 | Khu vực giáo viên | Nút **Giáo viên**: danh mục hồ sơ (tìm, mở, xoá), nhập kết quả Google Form (.csv/.xlsx) khớp theo Mã học sinh, cơ sở dữ liệu trường. Mở file trực tiếp: lưu trên trình duyệt máy đó. Mở qua máy chủ: cần mật khẩu, dữ liệu dùng chung. Mẫu câu hỏi: `docs/MAU-GOOGLE-FORM.md` |
 | Trợ lý tư vấn | Trả lời theo bộ câu hỏi có sẵn (quy định, tổ hợp, ngành nghề, gợi ý tổ hợp…), xưng hô theo vai trò, phản hồi an toàn khi có dấu hiệu khủng hoảng (111, 115) |
-| Khảo sát tại nhà | Mở qua link/QR trên điện thoại (không cần Telegram, không tài khoản); đồng thuận cha mẹ + học sinh; làm Bước 1–2 tại nhà và nộp an toàn về máy chủ |
+| Khảo sát tại nhà | Mở link mời `/?moi=…` (hoặc quét QR) trên điện thoại, không cần Telegram hay tài khoản: đồng ý (cha mẹ + học sinh) → Bước 1 → Bước 2 → **Nộp cho giáo viên**; lưu nháp trên máy, nộp lại được tới khi hết hạn. **Chỉ chạy khi mở qua máy chủ của trường** (Tailscale Funnel); trên GitHub Pages hoặc mở file trực tiếp, link mời báo không dùng được |
 | Bot Telegram giáo viên | Tạo mã mời 1 em (`/taolink`) hoặc cả lớp (`/taolop` xuất PDF in A4 8 ô/trang + CSV); thông báo nộp bài; tóm tắt hồ sơ an toàn (`/hoso`); cảnh báo (`/canhbao`); theo dõi (`/theodoi`); xuất CSV (`/xuat`) |
 
-Mẹo khi thử: ở mỗi bài trắc nghiệm có nút **“Điền ngẫu nhiên (để thử demo)”** để đi nhanh qua các bước.
+Mẹo khi thử: ở mỗi bài trắc nghiệm có nút **“Điền ngẫu nhiên (để thử demo)”** để đi nhanh qua các bước (có hỏi lại trước khi ghi đè; không hiện trong khảo sát tại nhà).
 
 ## Cấu trúc thư mục
 ```
@@ -66,6 +66,14 @@ Giáo viên tạo link/QR qua Bot Telegram → cha mẹ và học sinh làm Bư�
 - Hướng dẫn thực hành cho giáo viên: `docs/HUONG-DAN-GIAO-VIEN-KHAO-SAT.md`.
 - Hướng dẫn cấu hình Bot: `server/HUONG-DAN-BOT-GIAO-VIEN.md`.
 - Tài liệu kỹ thuật chi tiết: `docs/BAN-GIAO-BOT-TELEGRAM.md`.
+- Bot gửi giáo viên kết quả trắc nghiệm **chấm giống hệt web**: chưa làm đủ câu thì chỉ báo “chưa đủ (n/N)”, không gắn nhãn.
+
+## Kiểm thử
+```bash
+pip install -r server/requirements-bot.txt
+python -m unittest discover -s server/tests      # máy chủ + bot (dữ liệu giả, không gọi Telegram thật)
+python server/tests/e2e_khao_sat.py               # trình duyệt: khảo sát tại nhà, giáo viên, Bước 6, khủng hoảng (cần Playwright)
+```
 
 ## Gắn bot Telegram / máy chủ AI
 Web đã chừa sẵn chỗ gắn. Khi có máy chủ AI (có thể dùng chung với bot Telegram), chỉ cần điền địa chỉ vào `js/config.js`:
