@@ -309,7 +309,7 @@ class TestInvites(unittest.TestCase):
                 "consent": {"parent": True, "student": True},
                 "state": {
                     "profile": {"code": "HACKER999", "nickname": "Tí", "schoolName": "THPT Demo"},
-                    "tests": {"holland": {"R": 15, "I": 20}}
+                    "tests": {"holland": {"R": [4, 4, 3, 2, 2, 0, 0, 0, 0], "I": [4] * 5 + [0] * 4}}
                 }
             }
         )
@@ -325,7 +325,7 @@ class TestInvites(unittest.TestCase):
         saved = json.loads(prof_file.read_text("utf-8"))
         self.assertEqual(saved["code"], "HS004")
         self.assertEqual(saved["data"]["profile"]["code"], "HS004")
-        self.assertEqual(saved["data"]["tests"]["holland"]["R"], 15)
+        self.assertEqual(saved["data"]["tests"]["holland"]["R"], [4, 4, 3, 2, 2, 0, 0, 0, 0])
 
     # 10. Nộp không ghi đè data.final / data.tracking đã có
     def test_10_submit_does_not_overwrite_existing_steps_3_to_7(self):
@@ -369,7 +369,7 @@ class TestInvites(unittest.TestCase):
                 "consent": {"parent": True, "student": True},
                 "state": {
                     "profile": {"nickname": "Bình Mới", "className": "10A1"},
-                    "tests": {"holland": {"R": 25, "E": 18}, "mbti": {"type": "INTJ"}},
+                    "tests": {"holland": {"R": [3] * 9, "E": [2] * 9}, "mbti": ["a"] * 70},
                     "final": {"evil": "ghi đè"},
                     "tracking": []
                 }
@@ -383,8 +383,8 @@ class TestInvites(unittest.TestCase):
 
         # Dữ liệu Bước 1-2 được cập nhật
         self.assertEqual(d["profile"]["nickname"], "Bình Mới")
-        self.assertEqual(d["tests"]["holland"]["R"], 25)
-        self.assertEqual(d["tests"]["mbti"]["type"], "INTJ")
+        self.assertEqual(d["tests"]["holland"]["R"], [3] * 9)
+        self.assertEqual(d["tests"]["mbti"], ["a"] * 70)
 
         # Dữ liệu Bước 3-7 của giáo viên được GIỮ NGUYÊN
         self.assertEqual(d["final"], {"selected": "T01_KHTN", "teacherNotes": "Định hướng tốt"})

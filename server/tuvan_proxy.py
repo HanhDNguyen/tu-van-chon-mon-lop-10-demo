@@ -78,16 +78,114 @@ CHANNEL_NOTE = (
 
 _lock = threading.Lock()
 _hits, _login_hits, _tokens, _submit_hits = {}, {}, {}, {}
+LOGIN_PER_IP = 10       # số lần đăng nhập mỗi IP trong 10 phút
+LOGIN_GLOBAL = 60       # tổng số lần đăng nhập (mọi IP) trong 10 phút – chặn dò mật khẩu bằng IP giả
 
 def rate_ok(store, key, limit, window=WINDOW):
     now = time.time()
     with _lock:
+        if len(store) > 5000:  # dọn khoá cũ để bộ nhớ không tăng mãi
+            for k in [k for k, v in store.items() if not v or now - v[-1] >= window]:
+                store.pop(k, None)
         q = [t for t in store.get(key, []) if now - t < window]
         ok = len(q) < limit
         if ok:
             q.append(now)
         store[key] = q
         return ok
+
+# Loại bỏ khoá nguy hiểm khỏi JSON do người dùng gửi (chống "prototype pollution" khi trình duyệt mở lại dữ liệu)
+_BAD_KEYS = {"__proto__", "constructor", "prototype"}
+
+def strip_bad_keys(o, depth=0):
+    if depth > 12:
+        return None
+    if isinstance(o, dict):
+        return {k: strip_bad_keys(v, depth + 1) for k, v in o.items() if isinstance(k, str) and k not in _BAD_KEYS}
+    if isinstance(o, list):
+        return [strip_bad_keys(v, depth + 1) for v in o]
+    return o
+
+def _no_nan(_c):
+    raise ValueError("dữ liệu có giá trị số không hợp lệ (NaN/Infinity)")
+
+# ---------------- Kiểm tra dữ liệu khảo sát tại nhà ----------------
+HOLLAND_KEYS = ("R", "I", "A", "S", "E", "C")
+EYSENCK_N, MBTI_N = 59, 70
+_CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_KEY_RX = re.compile(r"^[A-Za-z0-9_\-]{1,20}$")
+
+def _s(v, n=300):
+    if v is None:
+        return ""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        v = str(v)
+    if not isinstance(v, str):
+        return ""
+    return _CTRL.sub("", v).strip()[:n]
+
+def _str_list(v, n=20, item_len=40):
+    if not isinstance(v, list):
+        return []
+    out = []
+    for x in v[:n]:
+        s = _s(x, item_len)
+        if s and s not in out:
+            out.append(s)
+    return out
+
+def clean_home_state(state):
+    """Chỉ giữ các trường Bước 1–2 mà web dùng, đúng kiểu và độ dài; bỏ mọi khoá lạ."""
+    p = state.get("profile") if isinstance(state.get("profile"), dict) else {}
+    t = state.get("tests") if isinstance(state.get("tests"), dict) else {}
+    grades = {}
+    if isinstance(p.get("grades"), dict):
+        for k, v in list(p["grades"].items())[:30]:
+            if not isinstance(k, str) or not _KEY_RX.match(k) or k in _BAD_KEYS:
+                continue
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 10:
+                grades[k] = v
+            else:
+                sv = _s(v, 20)
+                if sv:
+                    grades[k] = sv
+    cond_in = p.get("cond") if isinstance(p.get("cond"), dict) else {}
+    profile = {
+        "nickname": _s(p.get("nickname"), 60),
+        "schoolId": _s(p.get("schoolId"), 60),
+        "schoolOther": _s(p.get("schoolOther"), 200),
+        "province": _s(p.get("province"), 100),
+        "grades": grades,
+        "exam10": _s(p.get("exam10"), 20),
+        "talents": _s(p.get("talents"), 500),
+        "liked": _str_list(p.get("liked")),
+        "disliked": _str_list(p.get("disliked")),
+        "cond": {k: _s(cond_in.get(k), 100) for k in ("extra", "time", "device", "econ")},
+        "health": _s(p.get("health"), 300),
+        "wish": _s(p.get("wish"), 1000),
+        "familyWish": _s(p.get("familyWish"), 1000),
+    }
+    hol_in = t.get("holland") if isinstance(t.get("holland"), dict) else {}
+    holland = {}
+    for k in HOLLAND_KEYS:
+        arr = hol_in.get(k) if isinstance(hol_in.get(k), list) else []
+        holland[k] = [(x if isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 4 else None)
+                      for x in (arr + [None] * 9)[:9]]
+    def ans(name, n, ok):
+        arr = t.get(name) if isinstance(t.get(name), list) else []
+        return [(x if x in ok else None) for x in (arr + [None] * n)[:n]]
+    tests = {"holland": holland, "eysenck": ans("eysenck", EYSENCK_N, ("+", "-")), "mbti": ans("mbti", MBTI_N, ("a", "b"))}
+    return profile, tests
+
+def unanswered(tests):
+    n = sum(1 for k in HOLLAND_KEYS for x in tests["holland"][k] if x is None)
+    return n + sum(1 for x in tests["eysenck"] if x is None) + sum(1 for x in tests["mbti"] if x is None)
+
+_REDACT = re.compile(r"(/api/(?:submit|invite)/)[^\s?\"/]+|([?&]moi=)[^\s&\"#]+")
+
+def redact(line):
+    """Không để mã mời gốc xuất hiện trong log."""
+    return _REDACT.sub(lambda m: (m.group(1) or m.group(2)) + "<an>", line)
 
 # ---------------- Lưu trữ JSON ----------------
 def _read_json(p, default):
@@ -99,7 +197,7 @@ def _read_json(p, default):
 def _write_json(p, obj):
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f"{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1), "utf-8")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1, allow_nan=False), "utf-8")
     os.replace(tmp, p)
 
 def _hash_token(tok):
@@ -272,13 +370,24 @@ class H(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(b)
 
     def client_ip(self):
-        return self.headers.get("X-Forwarded-For", "").split(",")[0].strip() or self.client_address[0]
+        # Chỉ tin X-Forwarded-For khi kết nối đến từ chính máy này (Tailscale Funnel chuyển tiếp qua 127.0.0.1).
+        # Lấy phần tử CUỐI: do trạm chuyển tiếp nối thêm; các phần tử đầu do người gọi tự gửi nên có thể giả.
+        peer = self.client_address[0]
+        xff = self.headers.get("X-Forwarded-For", "")
+        if xff and peer in ("127.0.0.1", "::1"):
+            last = xff.split(",")[-1].strip()
+            try:
+                ipaddress.ip_address(last)
+                return last
+            except ValueError:
+                pass
+        return peer
 
     def body(self, limit=600000):
         n = int(self.headers.get("Content-Length", "0") or 0)
         if n > limit:
             raise OverflowError
-        return json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+        return json.loads(self.rfile.read(n).decode("utf-8") or "{}", parse_constant=_no_nan)
 
     def teacher(self):
         if self.is_service:
@@ -409,7 +518,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/login":
                 if not TEACHER_PASSWORD:
                     return self._json(503, {"error": "máy chủ chưa đặt mật khẩu giáo viên"})
-                if not rate_ok(_login_hits, self.client_ip(), 10):
+                if not rate_ok(_login_hits, self.client_ip(), LOGIN_PER_IP) or not rate_ok(_login_hits, "*", LOGIN_GLOBAL):
                     return self._json(429, {"error": "thử quá nhiều lần, đợi 10 phút"})
                 pw = str(self.body(2000).get("password") or "")
                 if not hmac.compare_digest(pw.encode(), TEACHER_PASSWORD.encode()):
@@ -444,18 +553,19 @@ class H(BaseHTTPRequestHandler):
                 
                 b = self.body(204800)  # giới hạn 200 KB
                 consent = b.get("consent")
-                if not isinstance(consent, dict) or not consent.get("parent") or not consent.get("student"):
+                if not isinstance(consent, dict) or consent.get("parent") is not True or consent.get("student") is not True:
                     return self._json(400, {"error": "cần sự đồng ý của cả cha mẹ/người giám hộ và học sinh"})
-                
+
                 state = b.get("state")
                 if not isinstance(state, dict):
                     return self._json(400, {"error": "dữ liệu khảo sát không hợp lệ"})
-                
+
                 code = target.get("code")
-                profile_in = dict(state.get("profile") or {})
-                tests_in = dict(state.get("tests") or {})
-                profile_in["code"] = code
-                
+                # Chỉ nhận các trường Bước 1–2 hợp lệ; mã HS và lớp luôn lấy từ mã mời, không từ dữ liệu gửi lên
+                clean_profile, tests_in = clean_home_state(state)
+                class_name = target.get("className", "")
+                missing_answers = unanswered(tests_in)
+
                 prof_file = PROFILE_DIR() / f"{code}.json"
                 with _lock:
                     existing = _read_json(prof_file, None)
@@ -480,6 +590,13 @@ class H(BaseHTTPRequestHandler):
                             "data": data
                         }
                     
+                    # Giữ các trường giáo viên đã nhập (nếu có), chỉ thay phần học sinh/cha mẹ khai
+                    old_profile = data.get("profile") if isinstance(data.get("profile"), dict) else {}
+                    profile_in = strip_bad_keys(old_profile)
+                    profile_in.update(clean_profile)
+                    profile_in["code"] = code
+                    if class_name:
+                        profile_in["className"] = class_name
                     data["profile"] = profile_in
                     data["tests"] = tests_in
                     old_home = data.get("home") if isinstance(data.get("home"), dict) else {}
@@ -493,26 +610,22 @@ class H(BaseHTTPRequestHandler):
                             "at": now_str
                         }
                     }
-                    if profile_in.get("nickname"):
-                        rec["name"] = profile_in["nickname"]
-                    elif profile_in.get("name") and not rec.get("name"):
-                        rec["name"] = profile_in["name"]
-                    if profile_in.get("className"):
-                        rec["className"] = profile_in["className"]
-                    elif target.get("className") and not rec.get("className"):
-                        rec["className"] = target.get("className")
-                    if profile_in.get("schoolName"):
-                        rec["school"] = profile_in["schoolName"]
-                    elif profile_in.get("school") and not rec.get("school"):
-                        rec["school"] = profile_in["school"]
+                    if clean_profile.get("nickname"):
+                        rec["name"] = clean_profile["nickname"]
+                    if class_name:
+                        rec["className"] = class_name
+                    rec["unanswered"] = missing_answers
                     rec["updatedAt"] = now_str
                     _write_json(prof_file, rec)
-                    
-                    if target_idx >= 0:
-                        invs[target_idx]["submittedAt"] = now_str
-                        invs[target_idx]["submitCount"] = int(invs[target_idx].get("submitCount") or 0) + 1
-                        _write_json(INVITES(), invs)
-                    
+
+                    # Đọc lại danh sách mã mời ngay trong khoá để không ghi đè mã mời vừa tạo ở luồng khác
+                    invs = _read_json(INVITES(), [])
+                    for inv in invs:
+                        if inv.get("token_hash") == tok_hash:
+                            inv["submittedAt"] = now_str
+                            inv["submitCount"] = int(inv.get("submitCount") or 0) + 1
+                    _write_json(INVITES(), invs)
+
                     ev = {
                         "type": "submit",
                         "code": code,
@@ -520,7 +633,7 @@ class H(BaseHTTPRequestHandler):
                         "createdBy": target.get("createdBy", ""),
                         "submittedAt": now_str,
                         "submitCount": sub_count,
-                        "missingCount": rec.get("missing", 0)
+                        "unanswered": missing_answers
                     }
                     try:
                         EVENTS().parent.mkdir(parents=True, exist_ok=True)
@@ -643,10 +756,12 @@ class H(BaseHTTPRequestHandler):
         if not CODE_RX.match(code):
             return self._json(400, {"error": "mã học sinh chỉ gồm chữ, số, dấu - _ . (tối đa 40 ký tự)"})
         try:
-            rec = self.body(2000000)
+            rec = strip_bad_keys(self.body(2000000))
         except OverflowError:
             return self._json(413, {"error": "hồ sơ quá lớn"})
         except Exception:
+            return self._json(400, {"error": "dữ liệu không hợp lệ"})
+        if not isinstance(rec, dict):
             return self._json(400, {"error": "dữ liệu không hợp lệ"})
         rec["code"] = code
         rec["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -691,19 +806,19 @@ class H(BaseHTTPRequestHandler):
         return self._json(404, {"error": "not found"})
 
     def log_message(self, fmt, *args):
-        # Không ghi nội dung hội thoại hay hồ sơ vào log, chỉ ghi dòng truy cập
-        print("[%s] %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), fmt % args))
+        # Không ghi nội dung hội thoại hay hồ sơ vào log, chỉ ghi dòng truy cập (đã che mã mời)
+        print("[%s] %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), redact(fmt % args)), flush=True)
 
 class ServiceH(H):
     is_service = True
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Service-Token")
+        # Cổng dịch vụ chỉ cho bot cục bộ: không gửi header CORS để trang web bất kỳ không gọi vào được
+        return
 
     def origin_ok(self, origin):
-        return True
+        # Trình duyệt luôn gửi Origin; bot (urllib) thì không – từ chối mọi yêu cầu có Origin
+        return not origin
 
     def _drain_body(self):
         try:
